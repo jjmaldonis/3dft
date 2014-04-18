@@ -3,7 +3,7 @@
 
 APP = 3dft
 
-SRC = model_v2.f90 scattering_factors.f90 3dft.f90
+SRC = gfx.f90 model_v2.f90 scattering_factors.f90 3dft.f90
 OBJ = $(addsuffix .o, $(basename $(SRC)))
 
 FC = ifort
