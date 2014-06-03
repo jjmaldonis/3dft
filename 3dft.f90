@@ -18,6 +18,7 @@ program ft3d
     integer :: i,j,k,n ! Counters
     double precision, dimension(:,:,:), allocatable :: kgrid, ikgrid
     complex(kind=8), dimension(:,:,:), allocatable :: skgrid
+    complex :: sk
     double precision :: dp, dpx, dpy, dpz
     double precision :: kvec
     integer :: allbinsize
@@ -27,11 +28,13 @@ program ft3d
     ! based on how the fft code does it. I like that way.
 
     !call read_model("alsm_New8C0.xyz", m, istat)
-    call read_model("al_3x3x3.xyz", m, istat)
+    !call read_model("al_3x3x3.xyz", m, istat)
+    call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
     call read_f_e
 
     allbinsize = 256
-    allstart = -10.53498
+    !allstart = -(28.28427/2.0)
+    allstart = -1.5
 
     kminx = allstart
     kmaxx = -allstart
@@ -70,39 +73,54 @@ program ft3d
     !    enddo
     !enddo
 
+    ! Equation:
+    ! S(k) = Sum(over all atoms)[ f_i(k) * exp( 2*pi*i*k.r ) ]
+    ! Where f_i is the atomic scattering factor for species i
+    ! and k.r is the dot product of a k vector with every
+    ! positition vector r for each atom in the model.
+    ! You do this for every k vector in the grid.
+    write(*,*) "Calculating FT..."
     do i=1, nkx
         dpx = (kminx+i*dkx)
         do j=1, nky
             dpy = (kminy+j*dky)
-            do k=1, nkz
+            do k=1, nkz/2
                 dpz = (kminz+k*dkz)
-                kvec = sqrt((kminx+i*dkx)**2+(kminy+j*dky)**2+(kminz+k*dkz)**2)
+                kvec = sqrt(dpx**2+dpy**2+dpz**2)
                 do n=1, m%natoms
                     dp = dpx*m%xx%ind(n) + dpy*m%yy%ind(n) + dpz*m%zz%ind(n)
-                    skgrid(i,j,k) = skgrid(i,j,k) + ( f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp) )
+                    !sk = f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp)
+                    sk = cdexp(cpi2*dp)
+                    skgrid(i,j,k) = skgrid(i,j,k) + sk
+                    skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) + conjg(sk)
                 enddo
             enddo
         enddo
-        write(*,*) i*(1.0/nkx)*100, "percent done"
+        write(*,*) i*(100.0/nkx), "percent done"
     enddo
 
 
     ! Calculate I(k)
+    write(*,*) "Calculating I(k)..."
     do i=1, nkx
         do j=1, nky
             do k=1, nkz
                 ikgrid(i,j,k) = cdabs(skgrid(i,j,k))
+                !ikgrid(nkx-i,nky-j,nkz-k) = cdabs(conjg(skgrid(i,j,k)))
             enddo
         enddo
     enddo
 
-    open(unit=52,file='testing.gfx',form='formatted',status='unknown')
+    write(*,*) "Writing output..."
+    open(unit=52,file='Zr50_t3_256_2.gfx',form='formatted',status='unknown')
+    !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
     do i=1, nkx
         do j=1, nky
             do k=1, nkz
                 write(52,*) ikgrid(i,j,k)
             enddo
         enddo
+        write(*,*) i*(100.0/nkx), "percent done"
     enddo
     close(52)
     !call Write3DGFX('testing.gfx', ikgrid, istat)
