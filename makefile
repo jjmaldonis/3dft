@@ -1,13 +1,16 @@
 
 
 
-APP = inverse3dft
+#APP = 3dft
+#SRC = gfx.f90 model_v2.f90 scattering_factors.f90 3dft.f90
 
+APP = inverse3dft
 SRC = gfx.f90 model_v2.f90 scattering_factors.f90 inverse3dft.f90
+
 OBJ = $(addsuffix .o, $(basename $(SRC)))
 
 FC = ifort
-FCFLAGS = -O2 -fpp
+FCFLAGS = -O2 -openmp -fpp
 #FCFLAGS = -g -debug all -check all -implicitnone -warn all -fpp
 
 .SUFFIXES: .f90 .o

@@ -4,6 +4,7 @@ program ft3d
     use model_mod
     use scattering_factors
     use gfx
+    use omp_lib
     implicit none
     double precision, parameter :: pi = 3.1415926536
     complex(kind=8), parameter :: cpi = (0.0,pi)
@@ -22,14 +23,20 @@ program ft3d
     double precision :: dp, dpx, dpy, dpz
     double precision :: kvec
     integer :: allbinsize
+    integer :: nthr
     double precision :: allstart
+    logical :: writetootherside
+
+    nthr = omp_get_max_threads()
+    write(*,*) "OMP found a max number of threads of", nthr
 
     ! I still should rewrite how kmin and kmax's are defined
     ! based on how the fft code does it. I like that way.
 
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
-    call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
+    call read_model("al_3x3x3.xyz", m, istat)
     call read_f_e
 
     allbinsize = 256
@@ -80,6 +87,7 @@ program ft3d
     ! positition vector r for each atom in the model.
     ! You do this for every k vector in the grid.
     write(*,*) "Calculating FT..."
+    !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
     do i=1, nkx
         dpx = (kminx+i*dkx)
         do j=1, nky
@@ -87,17 +95,27 @@ program ft3d
             do k=1, nkz/2
                 dpz = (kminz+k*dkz)
                 kvec = sqrt(dpx**2+dpy**2+dpz**2)
+                !if(skgrid(nkx-i,nky-j,nkz-k) == 0.0) then
+                    !writetootherside = .true.
+                !else
+                    !writetootherside = .false.
+                !endif
                 do n=1, m%natoms
                     dp = dpx*m%xx%ind(n) + dpy*m%yy%ind(n) + dpz*m%zz%ind(n)
                     !sk = f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp)
                     sk = cdexp(cpi2*dp)
                     skgrid(i,j,k) = skgrid(i,j,k) + sk
-                    skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) + conjg(sk)
+                    !if(writetootherside) then
+                    !if( i/=allbinsize/2+1 .or. j/=allbinsize/2+1 .or. k/=allbinsize/2+1) then
+                    !if( i/=allbinsize/2 .or. k/=allbinsize/2) then
+                        skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) + conjg(sk)
+                    !endif
                 enddo
             enddo
         enddo
         write(*,*) i*(100.0/nkx), "percent done"
     enddo
+    !$omp end parallel do
 
 
     ! Calculate I(k)
@@ -112,7 +130,8 @@ program ft3d
     enddo
 
     write(*,*) "Writing output..."
-    open(unit=52,file='Zr50_t3_256_2.gfx',form='formatted',status='unknown')
+    open(unit=52,file='al_3x3x3.gfx',form='formatted',status='unknown')
+    !open(unit=52,file='Zr50_t3_256_2.gfx',form='formatted',status='unknown')
     !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
     do i=1, nkx
         do j=1, nky

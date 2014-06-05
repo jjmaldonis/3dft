@@ -4,6 +4,7 @@ program ft3d
     use model_mod
     use scattering_factors
     use gfx
+    use omp_lib
     implicit none
     double precision, parameter :: pi = 3.1415926536
     complex(kind=8), parameter :: cpi = (0.0,pi)
@@ -103,6 +104,7 @@ program ft3d
     !    enddo
     !enddo
 
+    !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
     do i=kxvolmin, kxvolmax
         dpx = (kminx+i*dkx)
         do j=kyvolmin, kyvolmax
@@ -120,6 +122,7 @@ program ft3d
         enddo
         !write(*,*) i*(50.0/nkx), "percent done"
     enddo
+    !$omp end parallel do
 
     ! Exponential the sides of the box
     ! Set up
@@ -199,6 +202,7 @@ program ft3d
     write(*,*) "if0", if0, cdabs(if0)
     !write(*,*) "Ifaces", (ifx1), (ifx2), (ify1), (ify2), (ifz1), (ifz2)
     !write(*,*) "Ifaces", cdabs(ifx1), cdabs(ifx2), cdabs(ify1), cdabs(ify2), cdabs(ifz1), cdabs(ifz2)
+    !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
     do i=kxvolmin-kspotextra, kxvolmax+kspotextra
         dpx = (kxc-i)
         do j=kyvolmin-kspotextra, kyvolmax+kspotextra
@@ -216,6 +220,7 @@ program ft3d
             enddo
         enddo
     enddo
+    !$omp end parallel do
     !do i=kxvolmin-kspotextra, kxvolmin-1
     !    dpx = (kxvolmin-i)
     !    do j=kyvolmin, kyvolmax
@@ -403,6 +408,7 @@ program ft3d
     !    enddo
     !    !write(*,*) n*(50.0/m%natoms), 'percent done'
     !enddo
+    !$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
     do i=kxvolmin-kspotextra, kxvolmax+kspotextra
         dpx = (kminx+i*dkx)
         do j=kyvolmin-kspotextra, kyvolmax+kspotextra
@@ -426,12 +432,14 @@ program ft3d
         enddo
         write(*,*) 50.0*(i-kxvolmax+1)/(kxvolmin-kxvolmax), 'percent done'
     enddo
+    !$omp end parallel do
     kxvolmin = allbinsize - kxvolmin
     kxvolmax = allbinsize - kxvolmax
     kyvolmin = allbinsize - kyvolmin
     kyvolmax = allbinsize - kyvolmax
     kzvolmin = allbinsize - kzvolmin
     kzvolmax = allbinsize - kzvolmax
+    !$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
     do i=kxvolmax-kspotextra, kxvolmin+kspotextra
         dpx = (kminx+i*dkx)
         do j=kyvolmax-kspotextra, kyvolmin+kspotextra
@@ -454,6 +462,7 @@ program ft3d
         enddo
         write(*,*) 50+50.0*(i-kxvolmin+1)/(kxvolmax-kxvolmin), 'percent done'
     enddo
+    !$omp end parallel do
 
     ! Calculate I(x)
     write(*,*) "Computing I(x)"
