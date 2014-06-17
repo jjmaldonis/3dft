@@ -1,7 +1,8 @@
 3dft
+inverse3dft
+stdev
 *.o
 *.mod
-inverse3dft
 *.err
 *.out
 *.txt
