@@ -39,8 +39,8 @@ program ft3d
 
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
-    call read_model("al_chunk.xyz", m, istat)
-    !call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
+    !call read_model("al_chunk.xyz", m, istat)
+    call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
     call read_f_e
 
     ! Let these be integers, representing the pixels we want to IFT
@@ -52,19 +52,26 @@ program ft3d
     !kzvolmin = 146
     !kzvolmax = 154
     ! For ZrCuAl
-    !kxvolmin = 151
-    !kxvolmax = 159
-    !kyvolmin = 121
-    !kyvolmax = 129
-    !kzvolmin = 146
-    !kzvolmax = 154
+    kxvolmin = 148
+    kxvolmax = 162
+    kyvolmin = 118
+    kyvolmax = 132
+    kzvolmin = 143
+    kzvolmax = 157
     ! For al_chunk
-    kxvolmin = 163
-    kxvolmax = 177
-    kyvolmin = 79
-    kyvolmax = 93
-    kzvolmin = 121
-    kzvolmax = 135
+    !kxvolmin = 163
+    !kxvolmax = 177
+    !kyvolmin = 79
+    !kyvolmax = 93
+    !kzvolmin = 121
+    !kzvolmax = 135
+    ! For al_chunk 128 pix
+    !kxvolmin = 162/2
+    !kxvolmax = 178/2
+    !kyvolmin = 78/2
+    !kyvolmax = 94/2
+    !kzvolmin = 120/2
+    !kzvolmax = 136/2
     write(*,*) "Selected spot:"
     write(*,*) "x:", kxvolmin,kxvolmax
     write(*,*) "y:", kyvolmin,kyvolmax
@@ -226,8 +233,6 @@ program ft3d
             do k=kzvolmin-kspotextra, kzvolmax+kspotextra
                 !if(i < kxvolmin .or. i > kxvolmax .or. j<kyvolmin .or.  j>kyvolmax .or. k<kzvolmin .or. k>kzvolmax) then
                 if(k<kzvolmin .or. k>kzvolmax) then
-                    if(i == 145 .and. j == 109) write(*,*) k
-                    !write(*,*) i,j,k
                     dpz = (kzc-k)
                     kvec = sqrt(dpx**2+dpy**2+dpz**2)
                     if( kvec .le. 2*kspotextra) then
@@ -266,8 +271,6 @@ program ft3d
         !write(*,*) i*(100.0/nkx), "percent done"
     enddo
     close(52)
-
-    stop
 
     write(*,*) "Computing IFT"
     !$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
@@ -337,7 +340,8 @@ program ft3d
     enddo
 
     write(*,*) "Writing I(x)"
-    open(unit=52,file='ift_model_al_chunk.txt',form='formatted',status='unknown')
+    !open(unit=52,file='ift_model_al_chunk.txt',form='formatted',status='unknown')
+    open(unit=52,file='ift_model_ZrCuAl.txt',form='formatted',status='unknown')
     do i=1, nkx
         do j=1, nky
             do k=1, nkz
