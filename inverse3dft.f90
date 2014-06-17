@@ -39,7 +39,8 @@ program ft3d
 
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
-    call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
+    call read_model("al_chunk.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
     call read_f_e
 
     ! Let these be integers, representing the pixels we want to IFT
@@ -50,12 +51,24 @@ program ft3d
     !kyvolmax = 128
     !kzvolmin = 146
     !kzvolmax = 154
-    kxvolmin = 151
-    kxvolmax = 159
-    kyvolmin = 121
-    kyvolmax = 129
-    kzvolmin = 146
-    kzvolmax = 154
+    ! For ZrCuAl
+    !kxvolmin = 151
+    !kxvolmax = 159
+    !kyvolmin = 121
+    !kyvolmax = 129
+    !kzvolmin = 146
+    !kzvolmax = 154
+    ! For al_chunk
+    kxvolmin = 163
+    kxvolmax = 177
+    kyvolmin = 79
+    kyvolmax = 93
+    kzvolmin = 121
+    kzvolmax = 135
+    write(*,*) "Selected spot:"
+    write(*,*) "x:", kxvolmin,kxvolmax
+    write(*,*) "y:", kyvolmin,kyvolmax
+    write(*,*) "z:", kzvolmin,kzvolmax
 
     allbinsize = 256
     !allstart = -(28.28427/2.0)
@@ -158,6 +171,7 @@ program ft3d
     ifx2 = 0.0
     do j=kyvolmin, kyvolmax
         do k=kzvolmin, kzvolmax
+            !write(*,*) kxvolmax,j,k
             ifx2 = ifx2 + skgrid(kxvolmax,j,k)
         enddo
     enddo
@@ -178,7 +192,7 @@ program ft3d
     ifz2 = ifz2/( (kxvolmax-kxvolmin)*(kyvolmax-kyvolmin) )
     
     i0 = (ifx1 + ifx2 + ify1 + ify2 + ifz1 + ifz2)/6.0
-    if0 = i0 * 0.05
+    if0 = i0
 
     ! Now do the exponential-ing
     !kdist_start = sqrt( kxvolmin**2 + kyc**2 + kzc**2 )*dkx
@@ -201,14 +215,19 @@ program ft3d
     write(*,*) "i0", i0, cdabs(i0)
     write(*,*) "if0", if0, cdabs(if0)
     !write(*,*) "Ifaces", (ifx1), (ifx2), (ify1), (ify2), (ifz1), (ifz2)
-    !write(*,*) "Ifaces", cdabs(ifx1), cdabs(ifx2), cdabs(ify1), cdabs(ify2), cdabs(ifz1), cdabs(ifz2)
+    write(*,*) "Ifaces", cdabs(ifx1), cdabs(ifx2), cdabs(ify1), cdabs(ify2), cdabs(ifz1), cdabs(ifz2)
     !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
     do i=kxvolmin-kspotextra, kxvolmax+kspotextra
+        if(i < kxvolmin .or. i > kxvolmax) then
         dpx = (kxc-i)
         do j=kyvolmin-kspotextra, kyvolmax+kspotextra
+            if(j<kyvolmin .or.  j>kyvolmax) then
             dpy = (kyc-j)
             do k=kzvolmin-kspotextra, kzvolmax+kspotextra
-                if(i < kxvolmin .or. i > kxvolmax .or. j<kyvolmin .or.  j>kyvolmax .or. k<kzvolmin .or. k>kzvolmax) then
+                !if(i < kxvolmin .or. i > kxvolmax .or. j<kyvolmin .or.  j>kyvolmax .or. k<kzvolmin .or. k>kzvolmax) then
+                if(k<kzvolmin .or. k>kzvolmax) then
+                    if(i == 145 .and. j == 109) write(*,*) k
+                    !write(*,*) i,j,k
                     dpz = (kzc-k)
                     kvec = sqrt(dpx**2+dpy**2+dpz**2)
                     if( kvec .le. 2*kspotextra) then
@@ -218,196 +237,39 @@ program ft3d
                     endif
                 endif
             enddo
+            endif
         enddo
+        endif
     enddo
     !$omp end parallel do
-    !do i=kxvolmin-kspotextra, kxvolmin-1
-    !    dpx = (kxvolmin-i)
-    !    do j=kyvolmin, kyvolmax
-    !        dpy = (kyc-j)
-    !        do k=kzvolmin, kzvolmax
-    !            dpz = (kzc-k)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            skgrid(i,j,k) = a0*cdexp( -b0 * (kvec))! - kxvolmin) )
-    !            skgrid(allbinsize-i,allbinsize-j,allbinsize-k) = a0*cdexp( -b0 * (kvec))! - kzvolmax) )
-    !            !write(*,*) a0, b0, kvec, kxvolmin
-    !            write(*,*) allbinsize-i,allbinsize-j,allbinsize-k
-    !            !write(*,*) dpx,dpy,dpz
-    !            write(*,*) cdabs(a0*cdexp( -b0 * (kvec)))! - kxvolmin) ))
-    !        enddo
-    !    enddo
-    !enddo
-    !kdist_start = sqrt( kyvolmin**2 + kxc**2 + kzc**2 )*dky
-    !a0 = ify1*2
-    !b0 = log(a0/if0)/(kspotextra)
-    !!b0 = log(if0/a0)/ (kyvolmin-kspotextra)!/dky
-    !!b0 = log(ify1/if0) /  ( ((kyvolmin-kspotextra)*dky) - kminy)
-    !!a0 = if0*cdexp(b0*((kyvolmin-kspotextra)*dky))
-    !do i=kxvolmin, kxvolmax
-    !    dpx = (kxc-i)
-    !    do j=kyvolmin-kspotextra, kyvolmin-1
-    !        dpy = (kyvolmin-j)
-    !        do k=kzvolmin, kzvolmax
-    !            dpz = (kzc-k)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            skgrid(i,j,k) = a0*cdexp( -b0 * (kvec))! - kyvolmin) )
-    !            skgrid(allbinsize-i,allbinsize-j,allbinsize-k) = a0*cdexp( -b0 * (kvec))! - kzvolmax) )
-    !        enddo
-    !    enddo
-    !enddo
-    !kdist_start = sqrt( kzvolmin**2 + kyc**2 + kxc**2 )*dkz
-    !a0 = ifz1*2
-    !b0 = log(a0/if0)/(kspotextra)
-    !!b0 = log(if0/a0)/ (kyvolmin-kspotextra)!/dkz
-    !!b0 = log(ifz1/if0) /  ( ((kzvolmin-kspotextra)*dkz) - kminz)
-    !!a0 = if0*cdexp(b0*((kzvolmin-kspotextra)*dkz))
-    !do i=kxvolmin, kxvolmax
-    !    dpx = (kxc-i)
-    !    do j=kyvolmin, kyvolmax
-    !        dpy = (kyc-j)
-    !        do k=kzvolmin-kspotextra, kzvolmin-1
-    !            dpz = (kzvolmin-k)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            skgrid(i,j,k) = a0*cdexp( -b0 * (kvec))! - kzvolmin) )
-    !            skgrid(allbinsize-i,allbinsize-j,allbinsize-k) = a0*cdexp( -b0 * (kvec))! - kzvolmax) )
-    !        enddo
-    !    enddo
-    !enddo
-    !kdist_start = sqrt( kxvolmax**2 + kyc**2 + kzc**2 )*dkx
-    !a0 = ifx2*2
-    !b0 = log(a0/if0)/(kspotextra)
-    !!b0 = -log(if0/a0)/ (kyvolmax+kspotextra)!/dkx
-    !!b0 = log(ifx2/if0) /  ( ((kxvolmax+kspotextra)*dkx) - kmaxx)
-    !!a0 = if0*cdexp(b0*((kxvolmax+kspotextra)*dkx))
-    !do i=kxvolmax+1, kxvolmax+kspotextra
-    !    dpx = (kxvolmax-i)
-    !    do j=kyvolmin, kyvolmax
-    !        dpy = (kyc-j)
-    !        do k=kzvolmin, kzvolmax
-    !            dpz = (kzc-k)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            skgrid(i,j,k) = a0*cdexp( -b0 * (kvec))! - kxvolmax) )
-    !            skgrid(allbinsize-i,allbinsize-j,allbinsize-k) = a0*cdexp( -b0 * (kvec))! - kzvolmax) )
-    !        enddo
-    !    enddo
-    !enddo
-    !kdist_start = sqrt( kyvolmax**2 + kxc**2 + kzc**2 )*dky
-    !a0 = ify2*2
-    !b0 = log(a0/if0)/(kspotextra)
-    !!b0 = -log(if0/a0)/ (kyvolmax+kspotextra)!/dky
-    !!b0 = log(ify2/if0) /  ( ((kyvolmax+kspotextra)*dky) - kmaxy)
-    !!a0 = if0*cdexp(b0*((kyvolmax+kspotextra)*dky))
-    !do i=kxvolmin, kxvolmax
-    !    dpx = (kxc-i)
-    !    do j=kyvolmax+1, kyvolmax+kspotextra
-    !        dpy = (kyvolmax-j)
-    !        do k=kzvolmin, kzvolmax
-    !            dpz = (kzc-k)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            skgrid(i,j,k) = a0*cdexp( -b0 * (kvec))! - kyvolmax) )
-    !            skgrid(allbinsize-i,allbinsize-j,allbinsize-k) = a0*cdexp( -b0 * (kvec))! - kzvolmax) )
-    !        enddo
-    !    enddo
-    !enddo
-    !kdist_start = sqrt( kzvolmax**2 + kxc**2 + kyc**2 )*dkz
-    !a0 = ifz2*2
-    !b0 = log(a0/if0)/(kspotextra)
-    !!b0 = -log(if0/a0)/ (kyvolmax+kspotextra)!/dkz
-    !!b0 = log(ifz2/if0) /  ( ((kzvolmax+kspotextra)*dkz) - kmaxz)
-    !!a0 = if0*cdexp(b0*((kzvolmax+kspotextra)*dkz))
-    !do i=kxvolmin, kxvolmax
-    !    dpx = (kxc-i)
-    !    do j=kyvolmin, kyvolmax
-    !        dpy = (kyc-j)
-    !        do k=kzvolmax+1, kzvolmax+kspotextra
-    !            dpz = (kzvolmax-k)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            skgrid(i,j,k) = a0*cdexp( -b0 * (kvec))! - kzvolmax) )
-    !            skgrid(allbinsize-i,allbinsize-j,allbinsize-k) = a0*cdexp( -b0 * (kvec))! - kzvolmax) )
-    !        enddo
-    !    enddo
-    !enddo
 
-    !! Calculate I(k)
-    !write(*,*) "Calculating I(k)..."
-    !do i=1, nkx
-    !    do j=1, nky
-    !        do k=1, nkz
-    !            ikgrid(i,j,k) = cdabs(skgrid(i,j,k))
-    !            !ikgrid(nkx-i,nky-j,nkz-k) = cdabs(conjg(skgrid(i,j,k)))
-    !        enddo
-    !    enddo
-    !enddo
+    ! Calculate I(k)
+    write(*,*) "Calculating I(k)..."
+    do i=1, nkx
+        do j=1, nky
+            do k=1, nkz
+                ikgrid(i,j,k) = cdabs(skgrid(i,j,k))
+                !ikgrid(nkx-i,nky-j,nkz-k) = cdabs(conjg(skgrid(i,j,k)))
+            enddo
+        enddo
+    enddo
 
-    !write(*,*) "Writing output..."
-    !open(unit=52,file='Zr50_t3_256_2.gfx',form='formatted',status='unknown')
-    !!open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
-    !do i=1, nkx
-    !    do j=1, nky
-    !        do k=1, nkz
-    !            write(52,*) ikgrid(i,j,k)
-    !        enddo
-    !    enddo
-    !    write(*,*) i*(100.0/nkx), "percent done"
-    !enddo
-    !close(52)
+    write(*,*) "Writing output..."
+    open(unit=52,file='ift_spot.gfx',form='formatted',status='unknown')
+    !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
+    do i=1, nkx
+        do j=1, nky
+            do k=1, nkz
+                write(52,*) ikgrid(i,j,k)
+            enddo
+        enddo
+        !write(*,*) i*(100.0/nkx), "percent done"
+    enddo
+    close(52)
 
-    !stop
+    stop
 
-    !! Do the opposite side/box as well
-    !kxvolmin = allbinsize - kxvolmin
-    !kxvolmax = allbinsize - kxvolmax
-    !kyvolmin = allbinsize - kyvolmin
-    !kyvolmax = allbinsize - kyvolmax
-    !kzvolmin = allbinsize - kzvolmin
-    !kzvolmax = allbinsize - kzvolmax
-    !do i=kxvolmax, kxvolmin
-    !    dpx = (kminx+i*dkx)
-    !    do j=kyvolmax, kyvolmin
-    !        dpy = (kminy+j*dky)
-    !        do k=kzvolmax, kzvolmin
-    !            dpz = (kminz+k*dkz)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            do n=1, m%natoms
-    !                dp = dpx*m%xx%ind(n) + dpy*m%yy%ind(n) + dpz*m%zz%ind(n)
-    !                !skgrid(i,j,k) = skgrid(i,j,k) + ( f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp) )
-    !                skgrid(i,j,k) = skgrid(i,j,k) + ( cdexp(cpi2*dp) )
-    !            enddo
-    !        enddo
-    !    enddo
-    !    !write(*,*) i*(50.0/nkx), "percent done"
-    !enddo
-
-    ! Equation: for forward FT
-    ! S(k) = Sum(over all atoms)[ f_i(k) * exp( 2*pi*i*k.r ) ]
-    ! Where f_i is the atomic scattering factor for species i
-    ! and k.r is the dot product of a k vector with every
-    ! positition vector r for each atom in the model.
-    ! You do this for every k vector in the grid.
-    
-    ! Equation: for inverse FT
-    ! Sum(over all k vectors)[ F_i(x) * exp( -2*pi*i*k.x ) ]
-    ! where F_i is
-    ! and x is
     write(*,*) "Computing IFT"
-    !do n=1, m%natoms
-    !    binx = aint((m%xx%ind(n)+m%lx/2.0)/m%lx*nkx)
-    !    biny = aint((m%yy%ind(n)+m%ly/2.0)/m%ly*nky)
-    !    binz = aint((m%zz%ind(n)+m%lz/2.0)/m%lz*nkz)
-    !    do i=kxvolmax, kxvolmin
-    !        dpx = (kminx+i*dkx)
-    !        do j=kyvolmax, kyvolmin
-    !            dpy = (kminy+j*dky)
-    !            do k=kzvolmax, kzvolmin
-    !                dpz = (kminz+k*dkz)
-    !                kvec = sqrt((kminx+i*dkx)**2+(kminy+j*dky)**2+(kminz+k*dkz)**2)
-    !                dp = dpx*m%xx%ind(n) + dpy*m%yy%ind(n) + dpz*m%zz%ind(n)
-    !                mgrid(binx,biny,binz) = mgrid(binx,biny,binz) + ( skgrid(i,j,k) * cdexp(-cpi2*dp) )
-    !            enddo
-    !        enddo
-    !    enddo
-    !    !write(*,*) n*(50.0/m%natoms), 'percent done'
-    !enddo
     !$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
     do i=kxvolmin-kspotextra, kxvolmax+kspotextra
         dpx = (kminx+i*dkx)
@@ -475,7 +337,7 @@ program ft3d
     enddo
 
     write(*,*) "Writing I(x)"
-    open(unit=52,file='ift_model.txt',form='formatted',status='unknown')
+    open(unit=52,file='ift_model_al_chunk.txt',form='formatted',status='unknown')
     do i=1, nkx
         do j=1, nky
             do k=1, nkz

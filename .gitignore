@@ -1,3 +1,8 @@
 3dft
 *.o
 *.mod
+inverse3dft
+*.err
+*.out
+*.txt
+*.gfx
