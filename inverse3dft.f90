@@ -39,8 +39,8 @@ program ft3d
 
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
-    !call read_model("al_chunk.xyz", m, istat)
-    call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
+    call read_model("al_chunk.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
     call read_f_e
 
     ! Let these be integers, representing the pixels we want to IFT
@@ -52,12 +52,12 @@ program ft3d
     !kzvolmin = 146
     !kzvolmax = 154
     ! For ZrCuAl
-    kxvolmin = 148
-    kxvolmax = 162
-    kyvolmin = 118
-    kyvolmax = 132
-    kzvolmin = 143
-    kzvolmax = 157
+    !kxvolmin = 148
+    !kxvolmax = 162
+    !kyvolmin = 118
+    !kyvolmax = 132
+    !kzvolmin = 143
+    !kzvolmax = 157
     ! For al_chunk
     !kxvolmin = 163
     !kxvolmax = 177
@@ -66,18 +66,18 @@ program ft3d
     !kzvolmin = 121
     !kzvolmax = 135
     ! For al_chunk 128 pix
-    !kxvolmin = 162/2
-    !kxvolmax = 178/2
-    !kyvolmin = 78/2
-    !kyvolmax = 94/2
-    !kzvolmin = 120/2
-    !kzvolmax = 136/2
+    kxvolmin = 162/2
+    kxvolmax = 178/2
+    kyvolmin = 78/2
+    kyvolmax = 94/2
+    kzvolmin = 120/2
+    kzvolmax = 136/2
     write(*,*) "Selected spot:"
     write(*,*) "x:", kxvolmin,kxvolmax
     write(*,*) "y:", kyvolmin,kyvolmax
     write(*,*) "z:", kzvolmin,kzvolmax
 
-    allbinsize = 256
+    allbinsize = 128
     !allstart = -(28.28427/2.0)
     allstart = -1.5
 
@@ -134,9 +134,10 @@ program ft3d
                 kvec = sqrt(dpx**2+dpy**2+dpz**2)
                 do n=1, m%natoms
                     dp = dpx*m%xx%ind(n) + dpy*m%yy%ind(n) + dpz*m%zz%ind(n)
-                    !skgrid(i,j,k) = skgrid(i,j,k) + ( f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp) )
-                    skgrid(i,j,k) = skgrid(i,j,k) + ( cdexp(cpi2*dp) )
-                    skgrid(allbinsize-i,allbinsize-j,allbinsize-k) = conjg(skgrid(i,j,k))
+                    !sk = f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp)
+                    sk = cdexp(cpi2*dp)
+                    skgrid(i,j,k) = skgrid(i,j,k) + sk
+                    skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk)
                 enddo
             enddo
         enddo
@@ -260,7 +261,7 @@ program ft3d
     enddo
 
     write(*,*) "Writing output..."
-    open(unit=52,file='ift_spot.gfx',form='formatted',status='unknown')
+    open(unit=52,file='ift_spot_al_chunck_128.gfx',form='formatted',status='unknown')
     !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
     do i=1, nkx
         do j=1, nky
@@ -341,7 +342,7 @@ program ft3d
 
     write(*,*) "Writing I(x)"
     !open(unit=52,file='ift_model_al_chunk.txt',form='formatted',status='unknown')
-    open(unit=52,file='ift_model_ZrCuAl.txt',form='formatted',status='unknown')
+    open(unit=52,file='ift_model_al_chunck_128.txt',form='formatted',status='unknown')
     do i=1, nkx
         do j=1, nky
             do k=1, nkz
