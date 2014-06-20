@@ -35,8 +35,8 @@ program ft3d
 
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
-    !call read_model("al_chunk.xyz", m, istat)
-    call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
+    call read_model("al_chunk.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
     !call read_model("ZCA_t3_xtal.xyz", m, istat)
     !call read_model("xtal.t3.opposite.xyz", m, istat)
     !call read_model("icolike.t3.xyz", m, istat)
@@ -85,7 +85,8 @@ program ft3d
         dpx = (kminx+i*dkx)
         do j=1, nky
             dpy = (kminy+j*dky)
-            do k=1, nkz/2
+            !do k=1, nkz/2
+            do k=1, nkz
                 dpz = (kminz+k*dkz)
                 kvec = sqrt(dpx**2+dpy**2+dpz**2)
                 do n=1, m%natoms
@@ -93,7 +94,8 @@ program ft3d
                     !sk = f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp)
                     sk = cdexp(cpi2*dp)
                     skgrid(i,j,k) = skgrid(i,j,k) + sk
-                    skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk)
+                    !skgrid(nkx-i,nky-j,nkz-k+1) = skgrid(nkx-i,nky-j,nkz-k+1) + conjg(sk)
+                    !skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk)
                 enddo
             enddo
         enddo
@@ -113,22 +115,23 @@ program ft3d
     enddo
 
     write(*,*) "Writing output..."
-    open(unit=52,file='Zr50_t3_256.gfx',form='formatted',status='unknown')
+    !open(unit=52,file='Zr50_t3_256.gfx',form='formatted',status='unknown')
     !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
     !open(unit=52,file='al_3x3x3.gfx',form='formatted',status='unknown')
-    !open(unit=52,file='al_chunk.gfx',form='formatted',status='unknown')
+    open(unit=52,file='al_chunk.gfx',form='formatted',status='unknown')
     !open(unit=52,file='ZCA_t3_xtal.gfx',form='formatted',status='unknown')
     !open(unit=52,file='xtal.t3.opposite.gfx',form='formatted',status='unknown')
     !open(unit=52,file='icolike.t3.gfx',form='formatted',status='unknown')
     !open(unit=52,file='mixed.gfx',form='formatted',status='unknown')
     !open(unit=52,file='mixed_icolike.gfx',form='formatted',status='unknown')
-    do i=1, nkx
-        do j=1, nky
-            do k=1, nkz
-                write(52,*) ikgrid(i,j,k)
+    do k=1, nkz
+        do i=1, nkx
+            do j=1, nky
+                write(52,"(1f12.6)",advance='no') ikgrid(i,j,k)
             enddo
         enddo
-        write(*,*) i*(100.0/nkx), "percent done"
+        write(*,*) k*(100.0/nkz), "percent done"
+        write(52,*)
     enddo
     close(52)
     
