@@ -237,52 +237,27 @@ program ft3d
     write(*,*) "if0", if0, cdabs(if0)
     !write(*,*) "Ifaces", (ifx1), (ifx2), (ify1), (ify2), (ifz1), (ifz2)
     write(*,*) "Ifaces", cdabs(ifx1), cdabs(ifx2), cdabs(ify1), cdabs(ify2), cdabs(ifz1), cdabs(ifz2)
-    !!$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
+    !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
     do i=kxvolmin-kspotextra, kxvolmax+kspotextra
-        !if(i < kxvolmin .or. i > kxvolmax) then
-        !dpx = (kxc-i)
-        dpx = abs(i-kxc)-kxradius
-        dpx = abs(i-kxc)
         do j=kyvolmin-kspotextra, kyvolmax+kspotextra
-            !if(j<kyvolmin .or.  j>kyvolmax) then
-            !dpy = (kyc-j)
-            dpy = abs(j-kyc)-kyradius
-            dpy = abs(j-kyc)
             do k=kzvolmin-kspotextra, kzvolmax+kspotextra
                 if(i < kxvolmin .or. i > kxvolmax .or. j<kyvolmin .or.  j>kyvolmax .or. k<kzvolmin .or. k>kzvolmax) then
-                !if(k<kzvolmin .or. k>kzvolmax) then
-                mindist = 9999999999.0
-                do n=1,6
-                    dist = (i-facecoords(n,1))**2 + (j-facecoords(n,2))**2 + (k-facecoords(n,3))**2
-                    if(dist < mindist) mindist = dist
-                enddo
-                    !dpz = (kzc-k)
-                    dpz = abs(k-kzc)-kzradius
-                    dpz = abs(k-kzc)
-                    kvec = sqrt(dpx**2+dpy**2+dpz**2)
-                    if(dpx<1 .or. dpy<1 .or. dpz<1) then
-                        !write(*,*) i,j,k
-                        !write(*,*) int(dpx),int(dpy),int(dpz),kvec,sqrt(mindist)
-                        write(*,*) int(dpx),int(dpy),int(dpz),kvec,sqrt(mindist)
-                    endif
-                    kvec = kvec - sqrt(mindist)
-                    !write(*,*) dpx,dpy,dpz
-                    !write(*,*) k,kzc,kzradius
-                    !if( kvec .le. kspotextra) then
-                    if( sqrt(mindist) .le. kspotextra) then
-                        !sk = if0*hanning(kvec,kspotextra)
-                        sk = if0*hanning(sqrt(mindist),kspotextra)
-                        !write(*,*) dpx,dpy,dpz,kvec,hanning(kvec,kspotextra)
+                    mindist = 9999999999.0
+                    do n=1,6
+                        dist = (i-facecoords(n,1))**2 + (j-facecoords(n,2))**2 + (k-facecoords(n,3))**2
+                        if(dist < mindist) mindist = dist
+                    enddo
+                    mindist = sqrt(mindist)
+                    if( mindist .le. kspotextra) then
+                        sk = if0*hanning(mindist,kspotextra)
                         skgrid(i,j,k) = sk
                         skgrid(nkx-i+1,nky-j+1,nkz-k+1) = conjg(sk)
                     endif
                 endif
             enddo
-            !endif
         enddo
-        !endif
     enddo
-    !!$omp end parallel do
+    !$omp end parallel do
 
     ! Calculate I(k)
     write(*,*) "Calculating I(k)..."
