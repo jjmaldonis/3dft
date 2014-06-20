@@ -1,4 +1,12 @@
 
+double precision function hanning(x,ending)
+!complex function hanning(x,ending)
+    double precision, intent(in) :: x,ending
+    double precision :: temp
+    !hanning = CMPLX(0.5*(cos((2.0*3.1415926536*x)/(2*ending))+1),0.0)
+    hanning = 0.5*(cos((2.0*3.1415926536*x)/(2*ending))+1)
+end function hanning
+
 
 program ft3d
     use model_mod
@@ -16,11 +24,11 @@ program ft3d
     double precision:: kminy, kmaxy, dky
     double precision:: kminz, kmaxz, dkz
     integer :: nkx, nky, nkz
-    integer :: kxvolmin, kxvolmax
-    integer :: kyvolmin, kyvolmax
-    integer :: kzvolmin, kzvolmax
-    double precision:: drx, dry, drz
-    integer :: kspotextra, maxdk
+    double precision :: kxvolmin, kxvolmax
+    double precision :: kyvolmin, kyvolmax
+    double precision :: kzvolmin, kzvolmax
+    double precision :: drx, dry, drz
+    double precision :: kspotextra, maxdk
     integer :: i,j,k,n, ii,jj,kk ! Counters
     double precision, dimension(:,:,:), allocatable :: kgrid, ikgrid
     complex(kind=8), dimension(:,:,:), allocatable :: skgrid, mgrid
@@ -28,11 +36,16 @@ program ft3d
     double precision :: dp, dpx, dpy, dpz
     double precision :: kvec, kdist_start
     double precision :: kxc, kyc, kzc ! Centers of the box
+    double precision :: kxradius, kyradius, kzradius
     ! Average intensities of each face, total average intensity, and final intensity
     complex(kind=8) :: ifx1, ifx2, ify1, ify2, ifz1, ifz2, i0, if0, a0, b0
     integer :: allbinsize
     integer :: binx, biny, binz
     double precision :: allstart
+    double precision :: hanning
+    !complex :: hanning
+    double precision, dimension(6,3) :: facecoords ! fx1, fy1, fz1, fx2, fy2, fz2
+    double precision :: dist,mindist
 
     ! I still should rewrite how kmin and kmax's are defined
     ! based on how the fft code does it. I like that way.
@@ -147,12 +160,21 @@ program ft3d
 
     ! Exponential the sides of the box
     ! Set up
+    kxradius = (kxvolmax - kxvolmin)/2.0
+    kyradius = (kyvolmax - kyvolmin)/2.0
+    kzradius = (kzvolmax - kzvolmin)/2.0
     kxc = (kxvolmax - kxvolmin)/2.0 + kxvolmin
     kyc = (kyvolmax - kyvolmin)/2.0 + kyvolmin
     kzc = (kzvolmax - kzvolmin)/2.0 + kzvolmin
     write(*,*) "Box center:",kxc,kyc,kzc
     maxdk = max(kxvolmax-kxvolmin,kyvolmax-kyvolmin,kzvolmax-kzvolmin)
     kspotextra = 3.0/2.0*maxdk
+    facecoords(1,:) = (/kxvolmin,kyc,kzc/)
+    facecoords(2,:) = (/kxc,kyvolmin,kzc/)
+    facecoords(3,:) = (/kxc,kyc,kzvolmin/)
+    facecoords(4,:) = (/kxvolmax,kyc,kzc/)
+    facecoords(5,:) = (/kxc,kyvolmax,kzc/)
+    facecoords(6,:) = (/kxc,kyc,kzvolmax/)
 
     ! Calculate the average for each face
     ifx1 = 0.0
@@ -204,13 +226,6 @@ program ft3d
 
     ! Now do the exponential-ing
     !kdist_start = sqrt( kxvolmin**2 + kyc**2 + kzc**2 )*dkx
-    a0 = exp((kspotextra*log(i0)-(maxdk-0.5)*log(if0))/(kspotextra-(maxdk-0.5)))
-    b0 = 1.0/maxdk*(log(1.0/i0)+(kspotextra*log(i0)-maxdk*log(if0))/(kspotextra-maxdk))
-    !a0 = ifx1*2
-    !b0 = log(a0/if0)/(kspotextra)
-    !b0 = log(if0/a0)/ (kyvolmin-kspotextra)!/dkx
-    !b0 = log(ifx1/if0) /  ( ((kxvolmin-kspotextra)*dkx) - kminx)
-    !a0 = if0*cdexp(b0*((kxvolmin-kspotextra)*dkx))
     write(*,*) "x:", kxvolmin-kspotextra, kxvolmax+kspotextra
     write(*,*) "y:", kyvolmin-kspotextra, kyvolmax+kspotextra
     write(*,*) "z:", kzvolmin-kspotextra, kzvolmax+kspotextra
@@ -218,36 +233,56 @@ program ft3d
     write(*,*) "y:", allbinsize-(kyvolmin-kspotextra), allbinsize-(kyvolmax+kspotextra)
     write(*,*) "z:", allbinsize-(kzvolmin-kspotextra), allbinsize-(kzvolmax+kspotextra)
     write(*,*) "kspotextra", kspotextra
-    write(*,*) "a0", a0
-    write(*,*) "b0", b0
     write(*,*) "i0", i0, cdabs(i0)
     write(*,*) "if0", if0, cdabs(if0)
     !write(*,*) "Ifaces", (ifx1), (ifx2), (ify1), (ify2), (ifz1), (ifz2)
     write(*,*) "Ifaces", cdabs(ifx1), cdabs(ifx2), cdabs(ify1), cdabs(ify2), cdabs(ifz1), cdabs(ifz2)
-    !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
+    !!$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
     do i=kxvolmin-kspotextra, kxvolmax+kspotextra
-        if(i < kxvolmin .or. i > kxvolmax) then
-        dpx = (kxc-i)
+        !if(i < kxvolmin .or. i > kxvolmax) then
+        !dpx = (kxc-i)
+        dpx = abs(i-kxc)-kxradius
+        dpx = abs(i-kxc)
         do j=kyvolmin-kspotextra, kyvolmax+kspotextra
-            if(j<kyvolmin .or.  j>kyvolmax) then
-            dpy = (kyc-j)
+            !if(j<kyvolmin .or.  j>kyvolmax) then
+            !dpy = (kyc-j)
+            dpy = abs(j-kyc)-kyradius
+            dpy = abs(j-kyc)
             do k=kzvolmin-kspotextra, kzvolmax+kspotextra
-                !if(i < kxvolmin .or. i > kxvolmax .or. j<kyvolmin .or.  j>kyvolmax .or. k<kzvolmin .or. k>kzvolmax) then
-                if(k<kzvolmin .or. k>kzvolmax) then
-                    dpz = (kzc-k)
+                if(i < kxvolmin .or. i > kxvolmax .or. j<kyvolmin .or.  j>kyvolmax .or. k<kzvolmin .or. k>kzvolmax) then
+                !if(k<kzvolmin .or. k>kzvolmax) then
+                mindist = 9999999999.0
+                do n=1,6
+                    dist = (i-facecoords(n,1))**2 + (j-facecoords(n,2))**2 + (k-facecoords(n,3))**2
+                    if(dist < mindist) mindist = dist
+                enddo
+                    !dpz = (kzc-k)
+                    dpz = abs(k-kzc)-kzradius
+                    dpz = abs(k-kzc)
                     kvec = sqrt(dpx**2+dpy**2+dpz**2)
-                    if( kvec .le. 2*kspotextra) then
-                        sk = a0*cdexp( -b0 * (kvec))
+                    if(dpx<1 .or. dpy<1 .or. dpz<1) then
+                        !write(*,*) i,j,k
+                        !write(*,*) int(dpx),int(dpy),int(dpz),kvec,sqrt(mindist)
+                        write(*,*) int(dpx),int(dpy),int(dpz),kvec,sqrt(mindist)
+                    endif
+                    kvec = kvec - sqrt(mindist)
+                    !write(*,*) dpx,dpy,dpz
+                    !write(*,*) k,kzc,kzradius
+                    !if( kvec .le. kspotextra) then
+                    if( sqrt(mindist) .le. kspotextra) then
+                        !sk = if0*hanning(kvec,kspotextra)
+                        sk = if0*hanning(sqrt(mindist),kspotextra)
+                        !write(*,*) dpx,dpy,dpz,kvec,hanning(kvec,kspotextra)
                         skgrid(i,j,k) = sk
-                        skgrid(allbinsize-i,allbinsize-j,allbinsize-k) = conjg(sk)
+                        skgrid(nkx-i+1,nky-j+1,nkz-k+1) = conjg(sk)
                     endif
                 endif
             enddo
-            endif
+            !endif
         enddo
-        endif
+        !endif
     enddo
-    !$omp end parallel do
+    !!$omp end parallel do
 
     ! Calculate I(k)
     write(*,*) "Calculating I(k)..."
@@ -260,8 +295,9 @@ program ft3d
         enddo
     enddo
 
-    write(*,*) "Writing output..."
-    open(unit=52,file='ift_spot_al_chunck_128.gfx',form='formatted',status='unknown')
+    write(*,*) "Writing spot output..."
+    open(unit=52,file='ift_spot.gfx',form='formatted',status='unknown')
+    !open(unit=52,file='ift_spot_al_chunck_128.gfx',form='formatted',status='unknown')
     !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
     do i=1, nkx
         do j=1, nky
@@ -272,6 +308,7 @@ program ft3d
         !write(*,*) i*(100.0/nkx), "percent done"
     enddo
     close(52)
+    stop
 
     write(*,*) "Computing IFT"
     !$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
@@ -288,7 +325,6 @@ program ft3d
                     dp = dpx*(m%lx+ii*drx) + dpy*(m%ly+jj*dry) + dpz*(m%lz+kk*drz)
                     sk = skgrid(i,j,k) * cdexp(-cpi2*dp)
                     mgrid(ii,jj,kk) = mgrid(ii,jj,kk) + sk
-                    !mgrid(allbinsize-ii,allbinsize-jj,allbinsize-kk) = mgrid(ii,jj,kk)
                     !mgrid(nkx-ii,nky-jj,nkz-kk) = mgrid(nkx-ii,nky-jj,nkz-kk) + conjg(sk)
                 enddo
                 enddo
@@ -323,7 +359,6 @@ program ft3d
                 enddo
                 enddo
                 enddo
-                write(*,*) i,j,k
             enddo
         enddo
         write(*,*) 50+50.0*(i-kxvolmin+1)/(kxvolmax-kxvolmin), 'percent done'
