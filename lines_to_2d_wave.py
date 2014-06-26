@@ -18,21 +18,22 @@ def main():
     print("Number of pixels in each direction (assumed to be equal): {0}".format(npix))
 
     of = open(outfile,'w')
-    of.write('IGOR\nWAVES/N=({0},{0},{0})\t {1}\nBEGIN\n'.format(npix,outfile[:outfile.index('.')]))
-    #i = 0
-    #subwave = ['                ']*(npix**2)
+    of.write('IGOR\nWAVES/D/N=({0},{0}) {1}\nBEGIN\n'.format(npix,outfile[:outfile.index('.')]))
+    i = 0
     with open(infile) as f:
         print("Opened infile for reading...")
         for line in f:
-            #subwave[ i%npix**2 ] = line.strip()
-            #if( i > 0 and i%npix**2 == 0):
-            #    of.write('\t{0}\n'.format("\t".join(subwave)))
-            #    print(i)
-            #i += 1
-            of.write(line)
-    #of.write('\t{0}\n'.format("\t".join(subwave)))
+            line = line.strip()
+            if(len(line) > 0):
+                line = line.split()
+                if(len(line) != npix):
+                    raise Exception("Hey! Increase the spacing between the numbers in the fortran output! {0}".format(len(line)))
+                of.write(' '.join(line)+'\n')
+                i += 1
+        if(i != npix):
+            raise Exception("Number of lines was incorrect! {0}".format(i))
     of.write('END\n')
-    of.write('X SetScale/P x 0,1,"", {0}; SetScale/P y 0,1,"", {0}; SetScale/P z 0,1,"", {0}; SetScale d 0,0,"", {0}'.format(outfile[:outfile.index('.')]))
+    of.write('X SetScale/P x 0,1,"", {0}; SetScale/P y 0,1,"", {0}'.format(outfile[:outfile.index('.')]))
     of.close()
 
 if __name__ == "__main__":

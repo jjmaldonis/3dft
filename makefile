@@ -1,4 +1,4 @@
-
+#ifort -O2 -openmp -fpp -c 2dft.f90 && ifort gfx.o model_v2.o scattering_factors.o 2dft.o -O2 -openmp -fpp -o 2dft
 
 FC = ifort
 FCFLAGS = -O2 -openmp -fpp

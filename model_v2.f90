@@ -296,7 +296,7 @@ contains
 
         m%rotated = .FALSE.
 
-        call recenter_model(0.0, 0.0, 0.0, m)
+        !call recenter_model(0.0, 0.0, 0.0, m)
         call check_model(m,istat)
 
         ! Calls hutch_position and hutch_add_atom in loops.

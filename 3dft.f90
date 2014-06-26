@@ -35,7 +35,8 @@ program ft3d
 
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
-    call read_model("al_chunk.xyz", m, istat)
+    !call read_model("al_chunk.xyz", m, istat)
+    call read_model("al_chunk_offcenter.xyz", m, istat)
     !call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
     !call read_model("ZCA_t3_xtal.xyz", m, istat)
     !call read_model("xtal.t3.opposite.xyz", m, istat)
@@ -44,7 +45,7 @@ program ft3d
     !call read_model("mixed_icolike.xyz", m, istat)
     call read_f_e
 
-    allbinsize = 256
+    allbinsize = 128
     allstart = -1.5
 
     kminx = allstart
@@ -118,7 +119,8 @@ program ft3d
     !open(unit=52,file='Zr50_t3_256.gfx',form='formatted',status='unknown')
     !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
     !open(unit=52,file='al_3x3x3.gfx',form='formatted',status='unknown')
-    open(unit=52,file='al_chunk.gfx',form='formatted',status='unknown')
+    !open(unit=52,file='al_chunk.gfx',form='formatted',status='unknown')
+    open(unit=52,file='al_chunk_offcenter.gfx',form='formatted',status='unknown')
     !open(unit=52,file='ZCA_t3_xtal.gfx',form='formatted',status='unknown')
     !open(unit=52,file='xtal.t3.opposite.gfx',form='formatted',status='unknown')
     !open(unit=52,file='icolike.t3.gfx',form='formatted',status='unknown')
