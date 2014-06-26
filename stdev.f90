@@ -33,13 +33,27 @@ program stdev
     allocate(ikgrid(npix,npix,npix))
     allocate(stddevdat(npix,npix,npix))
 
-    i = 1; j = 1; k = 1;
-    do i=1,numlines
-        read(52,*,iostat=reason) ikgrid(i,:,:)
-        write(*,*) "Read in line",i
-        !if(i == 256) i = 1
-        !if(mod(l,npix) == 0) j = j + 1
-        !if(mod(l,npix**2) == 0) k = k + 1
+    !i = 1; j = 1; k = 1;
+    !do l=1,numlines
+    !    read(52,*,iostat=reason,advance='no') ikgrid(i,j,k)
+    !    write(*,*) "Read in line",i
+    !    if(i == 256) i = 1
+    !    if(mod(l,npix) == 0) j = j + 1
+    !    if(mod(l,npix**2) == 0) k = k + 1
+    !enddo
+    do k=1, npix
+        do i=1, npix
+            do j=1, npix
+                if(i /= npix .or. j/= npix) then
+                read(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
+                else
+                read(52,"(1f14.6)") ikgrid(i,j,k)
+                endif
+            enddo
+        enddo
+        write(*,*) "Read in line", k
+        !write(*,*) k*(100.0/nkz), "percent done"
+        !write(52,*)
     enddo
     close(52)
 
