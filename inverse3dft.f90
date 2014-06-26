@@ -330,12 +330,10 @@ program ft3d
 
     write(*,*) "Writing ft, phase, and amp output..."
     open(unit=52,file='ft.gfx',form='formatted',status='unknown')
-    !open(unit=52,file='ift_spot_al_chunck_128.gfx',form='formatted',status='unknown')
-    !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
     do k=1, nkz
         do i=1, nkx
             do j=1, nky
-                write(52,"(1f12.6)",advance='no') ikgrid(i,j,k)
+                write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
             enddo
         enddo
         write(52,*)
@@ -345,7 +343,7 @@ program ft3d
     do j=1, nky
         do i=1, nkx
             do k=1, nkz
-                write(52,"(1f50.6)",advance='no') real(skgrid(i,j,k))
+                write(52,"(1f14.6)",advance='no') real(skgrid(i,j,k))
             enddo
         enddo
         write(52,*)
@@ -356,7 +354,7 @@ program ft3d
         do i=1, nkx
             do k=1, nkz
                 !write(52,"(1f50.6)",advance='no') aimag(skgrid(i,j,k))
-                write(52,"(1f50.6)",advance='no') atan2(real(skgrid(i,j,k)),aimag(skgrid(i,j,k)))
+                write(52,"(1f14.6)",advance='no') atan2(real(skgrid(i,j,k)),aimag(skgrid(i,j,k)))
             enddo
         enddo
         write(52,*)
@@ -462,9 +460,6 @@ program ft3d
     enddo
 
     write(*,*) "Writing mgrid..."
-    !open(unit=52,file='ift_model_al_chunk.txt',form='formatted',status='unknown')
-    !open(unit=52,file='ift_model_al_chunck_128.txt',form='formatted',status='unknown')
-    !open(unit=52,file='ift_model_al_chunk_offcenter_128.txt',form='formatted',status='unknown')
     open(unit=52,file='mgrid.gfx',form='formatted',status='unknown')
     do k=1, nkz
         do i=1, nkx
