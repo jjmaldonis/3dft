@@ -29,7 +29,7 @@ def main():
             #    of.write('\t{0}\n'.format("\t".join(subwave)))
             #    print(i)
             #i += 1
-            of.write(' '.join(line.strip().split()))
+            of.write(' '.join(line.strip().split())+'\n')
     #of.write('\t{0}\n'.format("\t".join(subwave)))
     of.write('END\n')
     of.write('X SetScale/P x 0,1,"", {0}; SetScale/P y 0,1,"", {0}; SetScale/P z 0,1,"", {0}; SetScale d 0,0,"", {0}'.format(outfile[:outfile.index('.')]))

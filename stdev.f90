@@ -1,22 +1,24 @@
 
 program stdev
     use omp_lib
+    implicit none
     integer :: numlines = 0
     integer :: reason = 0
     integer :: npix
     integer :: i,j,k,l
     integer :: ii,jj,kk
+    integer :: it, jt, kt
     integer :: radius
     double precision, dimension(:,:,:), allocatable :: ikgrid, stddevdat
     double precision, dimension(:), allocatable :: temp
-    double precision :: mean, sdev
+    double precision :: mean, sdev, s, x
 
-    radius = 11
+    radius = 8
     allocate(temp((2*radius+1)**3))
 
-    open(unit=52,file='.gfx',form='formatted',status='unknown')
+    open(unit=52,file='mgrid.gfx',form='formatted',status='unknown')
     do
-        read(*,*,iostat=reason) x
+        read(52,*,iostat=reason) x
         if(reason > 0) then
             error stop "reason > 0. Stopping!"
         else if(reason < 0) then
@@ -26,28 +28,40 @@ program stdev
         endif
     enddo
     rewind(52)
-    npix = anint(numlines**(1.0/3.0))
+    npix = numlines !anint(numlines**(1.0/3.0))
     write(*,*) "Number of pixels in each direction (assumed to be equal):", npix
     allocate(ikgrid(npix,npix,npix))
     allocate(stddevdat(npix,npix,npix))
 
     i = 1; j = 1; k = 1;
-    do l=1,numlines
-        read(*,*,iostat=reason) ikgrid(i,j,k)
-        if(i == 256) i = 1
-        if(mod(l,npix) == 0) j = j + 1
-        if(mod(l,npix**2) == 0) k = k + 1
+    do i=1,numlines
+        read(52,*,iostat=reason) ikgrid(i,:,:)
+        write(*,*) "Read in line",i
+        !if(i == 256) i = 1
+        !if(mod(l,npix) == 0) j = j + 1
+        !if(mod(l,npix**2) == 0) k = k + 1
     enddo
+    close(52)
 
-    !$omp parallel do private(ii,jj,kk,i,j,k,s,temp,mean,sdev) shared(ikgrid,stddevdat)
-    do ii=0,npix
-        do jj=0,npix
-            do kk=0,npix
-                s = 0
+    write(*,*) "Done reading gfx file, calculating stdev..."
+    !$omp parallel do private(ii,jj,kk,i,j,k,s,temp,mean,sdev,it,jt,kt) shared(ikgrid,stddevdat)
+    do ii=1,npix
+        do jj=1,npix
+            do kk=1,npix
+                s = 1
                 do i=ii-radius,ii+radius
                     do j=jj-radius,jj+radius
                         do k=kk-radius,kk+radius
-                            temp(s) = ikgrid(i,j,k)
+                            it = i
+                            jt = j
+                            kt = k
+                            if(it > npix) it = mod(it,npix)
+                            if(it < 1) it = npix + it
+                            if(jt > npix) jt = mod(jt,npix)
+                            if(jt < 1) jt = npix + jt
+                            if(kt > npix) kt = mod(kt,npix)
+                            if(kt < 1) kt = npix + kt
+                            temp(s) = ikgrid(it,jt,kt)
                             s = s + 1
                         enddo
                     enddo
@@ -61,18 +75,20 @@ program stdev
                 stddevdat(ii,jj,kk) = sdev
             enddo
         enddo
+        write(*,*) 100.0*ii/float(npix), "percent done"
     enddo
     !$omp end parallel do
     
     write(*,*) "Writing output..."
     open(unit=52,file='stdev.gfx',form='formatted',status='unknown')
-    do i=1, nkx
-        do j=1, nky
-            do k=1, nkz
-                write(52,*) stddevdat(i,j,k)
+    do k=1, npix
+        do i=1, npix
+            do j=1, npix
+                write(52,"(1f14.6)",advance='no') stddevdat(i,j,k)
             enddo
         enddo
-        write(*,*) i*(100.0/nkx), "percent done"
+        write(*,*) k*(100.0/npix), "percent done"
+        write(52,*)
     enddo
     close(52)
 
