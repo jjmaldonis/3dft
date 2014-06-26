@@ -33,7 +33,7 @@ Also run stdev.f90 to run the stdev on mgrid.gfx, but you may have to change 'ra
 
 When stdev is finished (it is pretty short if the radius is around 8 so you can do it on the head node)
 
-run: python lines_to_3d_wave.py stdev.gfx stdev.txt and copy this to Windows and into Igor. Take a look!
+run: ```python lines_to_3d_wave.py stdev.gfx stdev.txt``` and copy this to Windows and into Igor. Take a look!
 
 Finally, run:
 
