@@ -1,9 +1,7 @@
 
 double precision function hanning(x,ending)
-!complex function hanning(x,ending)
     double precision, intent(in) :: x,ending
     double precision :: temp
-    !hanning = CMPLX(0.5*(cos((2.0*3.1415926536*x)/(2*ending))+1),0.0)
     hanning = 0.5*(cos((2.0*3.1415926536*x)/(2*ending))+1)
 end function hanning
 
@@ -48,9 +46,6 @@ program ft3d
     double precision :: dist,mindist
     logical :: use_window = .true.
 
-    ! I still should rewrite how kmin and kmax's are defined
-    ! based on how the fft code does it. I like that way.
-
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
     !call read_model("al_chunk.xyz", m, istat)
@@ -61,19 +56,13 @@ program ft3d
     !use_window = .false.
     ! Let these be integers, representing the pixels we want to IFT
     ! This works best if this is a cube, include more rather than less.
-    !kxvolmin = 151
-    !kxvolmax = 158
-    !kyvolmin = 123
-    !kyvolmax = 128
-    !kzvolmin = 146
-    !kzvolmax = 154
     ! For ZrCuAl
-    kxvolmin = 148
-    kxvolmax = 162
-    kyvolmin = 118
-    kyvolmax = 132
-    kzvolmin = 143
-    kzvolmax = 157
+    kxvolmin = 143
+    kxvolmax = 157
+    kyvolmin = 148
+    kyvolmax = 162
+    kzvolmin = 118
+    kzvolmax = 132
     ! For al_chunk 256
     !kxvolmin = 80
     !kxvolmax = 92
@@ -81,7 +70,7 @@ program ft3d
     !kyvolmax = 134
     !kzvolmin = 122
     !kzvolmax = 134
-    ! For al_chunk 128 pix
+    ! For al_chunk 128
     !kxvolmin = 40
     !kxvolmax = 46
     !kyvolmin = 61
@@ -94,14 +83,16 @@ program ft3d
     !kyvolmax = 67
     !kzvolmin = 61
     !kzvolmax = 67
+    ! For the whole simulations
+    allbinsize = 256
+    !allstart = -(28.28427/2.0)
+    allstart = -1.5
+    write(*,*) "Number of pixels used:", allbinsize
+    write(*,*) "k-range:", -allstart, allstart
     write(*,*) "Selected spot:"
     write(*,*) "x:", kxvolmin,kxvolmax
     write(*,*) "y:", kyvolmin,kyvolmax
     write(*,*) "z:", kzvolmin,kzvolmax
-
-    allbinsize = 256
-    !allstart = -(28.28427/2.0)
-    allstart = -1.5
 
     kminx = allstart
     kmaxx = -allstart
@@ -128,23 +119,12 @@ program ft3d
     write(*,*) "    kz: start:",kminz, "step:", dkz
 
 
-    !allocate(kgrid(nkx,nky,nkz))
     allocate(skgrid(nkx,nky,nkz))
     allocate(mgrid(nkx,nky,nkz))
     allocate(ikgrid(nkx,nky,nkz))
-    !kgrid = 0.0
     skgrid = (0.0,0.0)
     mgrid = (0.0,0.0)
     ikgrid = 0.0
-
-    ! Array lookup for k will be faster than calculating it every time
-    !do i=1, nkx
-    !    do j=1, nky
-    !        do k=1, nkz
-    !            kgrid(i,j,k) = sqrt((kminx+i*dkx)**2+(kminy+j*dky)**2+(kminz+k*dkz)**2) ! Make sure this is right
-    !        enddo
-    !    enddo
-    !enddo
 
     write(*,*) "Calculating FT..."
     kxc = (kxvolmax - kxvolmin)/2.0 + kxvolmin
@@ -173,7 +153,7 @@ program ft3d
                 !write(*,*) "HERE",skgrid(i,j,k)
             enddo
         enddo
-        write(*,*) i*(50.0/nkx), "percent done"
+        write(*,*) i*(100.0/nkx), "percent done"
     enddo
     !$omp end parallel do
 
@@ -235,50 +215,7 @@ program ft3d
             if(cdabs(skgrid(i,j,kzvolmax)) > cdabs(ifz2)) ifz2 = skgrid(i,j,kzvolmax)
         enddo
     enddo
-    !! Based on the average of each face
-    !ifx1 = 0.0
-    !do j=kyvolmin, kyvolmax
-    !    do k=kzvolmin, kzvolmax
-    !        ifx1 = ifx1 + skgrid(kxvolmin,j,k)
-    !    enddo
-    !enddo
-    !ifx1 = ifx1/( (kyvolmax-kyvolmin)*(kzvolmax-kzvolmin) )
-    !ify1 = 0.0
-    !do i=kxvolmin, kxvolmax
-    !    do k=kzvolmin, kzvolmax
-    !        ify1 = ify1 + skgrid(i,kyvolmin,k)
-    !    enddo
-    !enddo
-    !ify1 = ify1/( (kxvolmax-kxvolmin)*(kzvolmax-kzvolmin) )
-    !ifz1 = 0.0
-    !do i=kxvolmin, kxvolmax
-    !    do j=kyvolmin, kyvolmax
-    !        ifz1 = ifz1 + skgrid(i,j,kzvolmin)
-    !    enddo
-    !enddo
-    !ifz1 = ifz1/( (kxvolmax-kxvolmin)*(kyvolmax-kyvolmin) )
-    !ifx2 = 0.0
-    !do j=kyvolmin, kyvolmax
-    !    do k=kzvolmin, kzvolmax
-    !        ifx2 = ifx2 + skgrid(kxvolmax,j,k)
-    !    enddo
-    !enddo
-    !ifx2 = ifx2/( (kyvolmax-kyvolmin)*(kzvolmax-kzvolmin) )
-    !ify2 = 0.0
-    !do i=kxvolmin, kxvolmax
-    !    do k=kzvolmin, kzvolmax
-    !        ify2 = ify2 + skgrid(i,kyvolmax,k)
-    !    enddo
-    !enddo
-    !ify2 = ify2/( (kxvolmax-kxvolmin)*(kzvolmax-kzvolmin) )
-    !ifz2 = 0.0
-    !do i=kxvolmin, kxvolmax
-    !    do j=kyvolmin, kyvolmax
-    !        ifz2 = ifz2 + skgrid(i,j,kzvolmax)
-    !    enddo
-    !enddo
-    !ifz2 = ifz2/( (kxvolmax-kxvolmin)*(kyvolmax-kyvolmin) )
-    
+
     i0 = (ifx1 + ifx2 + ify1 + ify2 + ifz1 + ifz2)/6.0
     if0 = i0
 
@@ -322,13 +259,21 @@ program ft3d
         do j=1, nky
             do k=1, nkz
                 ikgrid(i,j,k) = cdabs(skgrid(i,j,k))
-                !if(ikgrid(i,j,k) < 94.0 .and. ikgrid(i,j,k) > 90.0) write(*,*) i,j,k,ikgrid(i,j,k)
-                !ikgrid(nkx-i,nky-j,nkz-k) = cdabs(conjg(skgrid(i,j,k)))
             enddo
         enddo
     enddo
 
     write(*,*) "Writing ft, phase, and amp output..."
+    open(unit=52,file='ft_onespot.gfx',form='formatted',status='unknown')
+    do k=kzvolmin-kspotextra, kzvolmax+kspotextra
+        do i=kxvolmin-kspotextra, kxvolmax+kspotextra
+            do j=kyvolmin-kspotextra, kyvolmax+kspotextra
+                write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
     open(unit=52,file='ft.gfx',form='formatted',status='unknown')
     do k=1, nkz
         do i=1, nkx
@@ -339,10 +284,11 @@ program ft3d
         write(52,*)
     enddo
     close(52)
+    if(.not. use_window) stop
     open(unit=52,file='amp.gfx',form='formatted',status='unknown')
-    do j=1, nky
+    do k=1, nkx
         do i=1, nkx
-            do k=1, nkz
+            do j=1, nky
                 write(52,"(1f14.6)",advance='no') real(skgrid(i,j,k))
             enddo
         enddo
@@ -350,9 +296,9 @@ program ft3d
     enddo
     close(52)
     open(unit=52,file='phase.gfx',form='formatted',status='unknown')
-    do j=1, nky
+    do k=1, nkz
         do i=1, nkx
-            do k=1, nkz
+            do j=1, nky
                 !write(52,"(1f50.6)",advance='no') aimag(skgrid(i,j,k))
                 write(52,"(1f14.6)",advance='no') atan2(real(skgrid(i,j,k)),aimag(skgrid(i,j,k)))
             enddo
@@ -365,13 +311,13 @@ program ft3d
     !$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
     do i=1, nkx
         !dpx = (kminx+i*dkx)
-        dpx = -m%lx/2.0 + i*drx
+        dpx = -m%lx*0.5 + i*drx
         do j=1,nky
             !dpy = (kminy+j*dky)
-            dpy = -m%ly/2.0 + j*dry
+            dpy = -m%ly*0.5 + j*dry
             do k=1,nkz
                 !dpz = (kminz+k*dkz)
-                dpz = -m%lz/2.0 + k*drz
+                dpz = -m%lz*0.5 + k*drz
                 kvec = sqrt(dpx**2+dpy**2+dpz**2)
                 do ii=kxvolmin-kspotextra, kxvolmax+kspotextra
                 do jj=kyvolmin-kspotextra, kyvolmax+kspotextra
@@ -389,66 +335,9 @@ program ft3d
                 enddo
             enddo
         enddo
+        write(*,*) 100.0*i/float(nkx), "percent done with ift"
     enddo
     !$omp end parallel do
-    !!$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
-    !do i=kxvolmin-kspotextra, kxvolmax+kspotextra
-    !    dpx = (kminx+i*dkx)
-    !    do j=kyvolmin-kspotextra, kyvolmax+kspotextra
-    !        dpy = (kminy+j*dky)
-    !        do k=kzvolmin-kspotextra, kzvolmax+kspotextra
-    !            if(skgrid(i,j,k) .ne. CMPLX(0,0)) then
-    !            dpz = (kminz+k*dkz)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            do ii=1, nkx
-    !            do jj=1, nky
-    !            do kk=1, nkz
-    !                !dp = dpx*(m%lx+ii*drx) + dpy*(m%ly+jj*dry) + dpz*(m%lz+kk*drz)
-    !                dp = dpx*((ii-0.5)*drx+m%lx/2.0) + dpy*((jj-0.5)*dry+m%ly/2.0) + dpz*((kk-0.5)*drz+m%lz/2.0)
-    !                sk = skgrid(i,j,k) * cdexp(-cpi2*dp)
-    !                mgrid(ii,jj,kk) = mgrid(ii,jj,kk) + sk
-    !                !mgrid(nkx-ii,nky-jj,nkz-kk) = mgrid(nkx-ii,nky-jj,nkz-kk) + conjg(sk)
-    !            enddo
-    !            enddo
-    !            enddo
-    !            endif
-    !        enddo
-    !    enddo
-    !    write(*,*) 50.0*(i-kxvolmax+1)/(kxvolmin-kxvolmax), 'percent done'
-    !enddo
-    !!$omp end parallel do
-    !kxvolmin = allbinsize - kxvolmin
-    !kxvolmax = allbinsize - kxvolmax
-    !kyvolmin = allbinsize - kyvolmin
-    !kyvolmax = allbinsize - kyvolmax
-    !kzvolmin = allbinsize - kzvolmin
-    !kzvolmax = allbinsize - kzvolmax
-    !!$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
-    !do i=kxvolmax-kspotextra, kxvolmin+kspotextra
-    !    dpx = (kminx+i*dkx)
-    !    do j=kyvolmax-kspotextra, kyvolmin+kspotextra
-    !        dpy = (kminy+j*dky)
-    !        do k=kzvolmax-kspotextra, kzvolmin+kspotextra
-    !            if(skgrid(i,j,k) .ne. CMPLX(0,0)) then
-    !            dpz = (kminz+k*dkz)
-    !            kvec = sqrt(dpx**2+dpy**2+dpz**2)
-    !            do ii=1, nkx
-    !            do jj=1, nky
-    !            do kk=1, nkz
-    !                !dp = dpx*(m%lx+ii*drx) + dpy*(m%ly+jj*dry) + dpz*(m%lz+kk*drz)
-    !                dp = dpx*((ii-0.5)*drx+m%lx/2.0) + dpy*((jj-0.5)*dry+m%ly/2.0) + dpz*((kk-0.5)*drz+m%lz/2.0)
-    !                sk = skgrid(i,j,k) * cdexp(-cpi2*dp)
-    !                mgrid(ii,jj,kk) = mgrid(ii,jj,kk) + sk
-    !                !mgrid(nkx-ii,nky-jj,nkz-kk) = mgrid(nkx-ii,nky-jj,nkz-kk) + conjg(sk)
-    !            enddo
-    !            enddo
-    !            enddo
-    !            endif
-    !        enddo
-    !    enddo
-    !    write(*,*) 50+50.0*(i-kxvolmin+1)/(kxvolmax-kxvolmin), 'percent done'
-    !enddo
-    !!$omp end parallel do
 
     ! Calculate I(x)
     do i=1, nkx
