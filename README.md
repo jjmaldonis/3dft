@@ -50,3 +50,21 @@ where the first model file is the same as the one in the previous command (and w
 This generates a model called subvpcolored.cif which can be opened with vesta and is a vpcolored model.
 
 That is it! Change as you wish.
+
+Line by line, if you have all the spots indexed that you want to run:
+
+```
+vim inverse3dft.f90 # Change k-spot
+
+make ift && qsub slurm.sh
+
+python lines_to_3d_wave.py mgrid.gfx mgrid.txt # When the ift has finished
+
+python lines_to_3d_wave.py ft.gfx ft.txt # Now copy the files to windows
+
+./stdev
+
+python lines_to_3d_wave.py stdev.gfx stdev.txt # Copy this file too
+
+python ~/model_analysis/scripts/ift_atom_selection.py Zr50Cu35Al15_t3_final.xyz stdev.gfx
+```
