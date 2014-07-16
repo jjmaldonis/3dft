@@ -45,31 +45,64 @@ program ft3d
     double precision, dimension(6,3) :: facecoords ! fx1, fy1, fz1, fx2, fy2, fz2
     double precision :: dist,mindist
     logical :: use_window = .true.
+    integer :: length
+    character (len=32) :: jobID, c
+
+    call get_command_argument(1, c, length, istat)
+    if (istat == 0) then
+        jobID = "_"//trim(c)
+    else
+        jobID = ''
+    end if
 
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
     !call read_model("al_chunk.xyz", m, istat)
     !call read_model("al_chunk_offcenter.xyz", m, istat)
     call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t3_final_xtal_cut.xyz", m, istat)
+    !call read_model("sc_4.0.xyz", m, istat)
     call read_f_e
 
     !use_window = .false.
     ! Let these be integers, representing the pixels we want to IFT
     ! This works best if this is a cube, include more rather than less.
     ! For ZrCuAl
-    kxvolmin = 143
-    kxvolmax = 157
-    kyvolmin = 148
-    kyvolmax = 162
-    kzvolmin = 118
-    kzvolmax = 132
+    !kxvolmin = 95
+    !kxvolmax = 100
+    !kyvolmin = 136
+    !kyvolmax = 141
+    !kzvolmin = 139
+    !kzvolmax = 144
     ! For al_chunk 256
+    ! (400) g vector
+    !kxvolmin = 37*2
+    !kxvolmax = 51*2
+    !kyvolmin = 121*2
+    !kyvolmax = 135*2
+    !kzvolmin = 121*2
+    !kzvolmax = 135*2
+    ! (200) g vector
     !kxvolmin = 80
     !kxvolmax = 92
     !kyvolmin = 122
     !kyvolmax = 134
     !kzvolmin = 122
     !kzvolmax = 134
+    ! (200) cut smaller
+    !kxvolmin = 83
+    !kxvolmax = 89
+    !kyvolmin = 125
+    !kyvolmax = 131
+    !kzvolmin = 125
+    !kzvolmax = 131
+    ! (111) g vector
+    !kxvolmin = 100*2
+    !kxvolmax = 114*2
+    !kyvolmin = 100*2
+    !kyvolmax = 114*2
+    !kzvolmin = 142*2
+    !kzvolmax = 156*2
     ! For al_chunk 128
     !kxvolmin = 40
     !kxvolmax = 46
@@ -83,9 +116,21 @@ program ft3d
     !kyvolmax = 67
     !kzvolmin = 61
     !kzvolmax = 67
+    ! Variable #2=81,90; 0=124,133; 1=103,112; 3=60,69, 4=38,47
+    kxvolmin = 124
+    kxvolmax = 133
+    kyvolmin = 124
+    kyvolmax = 133
+    kzvolmin = 103
+    kzvolmax = 112
+    !kxvolmin = 87
+    !kxvolmax = 102
+    !kyvolmin = 87
+    !kyvolmax = 102
+    !kzvolmin = 87
+    !kzvolmax = 102
     ! For the whole simulations
     allbinsize = 256
-    !allstart = -(28.28427/2.0)
     allstart = -1.5
     write(*,*) "Number of pixels used:", allbinsize
     write(*,*) "k-range:", -allstart, allstart
@@ -149,8 +194,6 @@ program ft3d
                     !skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk)
                     skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) + conjg(sk)
                 enddo
-                !if(i==kxc .and. j==kyc .and. k==kzc) write(*,*) "HERE",skgrid(i,j,k)
-                !write(*,*) "HERE",skgrid(i,j,k)
             enddo
         enddo
         write(*,*) i*(100.0/nkx), "percent done"
@@ -263,18 +306,8 @@ program ft3d
         enddo
     enddo
 
-    write(*,*) "Writing ft, phase, and amp output..."
-    open(unit=52,file='ft_onespot.gfx',form='formatted',status='unknown')
-    do k=kzvolmin-kspotextra, kzvolmax+kspotextra
-        do i=kxvolmin-kspotextra, kxvolmax+kspotextra
-            do j=kyvolmin-kspotextra, kyvolmax+kspotextra
-                write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
-            enddo
-        enddo
-        write(52,*)
-    enddo
-    close(52)
-    open(unit=52,file='ft.gfx',form='formatted',status='unknown')
+    write(*,*) "Writing ft output..."
+    open(unit=52,file='ft'//trim(jobID)//'.gfx',form='formatted',status='unknown')
     do k=1, nkz
         do i=1, nkx
             do j=1, nky
@@ -284,28 +317,41 @@ program ft3d
         write(52,*)
     enddo
     close(52)
-    if(.not. use_window) stop
-    open(unit=52,file='amp.gfx',form='formatted',status='unknown')
-    do k=1, nkx
-        do i=1, nkx
-            do j=1, nky
-                write(52,"(1f14.6)",advance='no') real(skgrid(i,j,k))
-            enddo
-        enddo
-        write(52,*)
-    enddo
-    close(52)
-    open(unit=52,file='phase.gfx',form='formatted',status='unknown')
-    do k=1, nkz
-        do i=1, nkx
-            do j=1, nky
-                !write(52,"(1f50.6)",advance='no') aimag(skgrid(i,j,k))
-                write(52,"(1f14.6)",advance='no') atan2(real(skgrid(i,j,k)),aimag(skgrid(i,j,k)))
-            enddo
-        enddo
-        write(52,*)
-    enddo
-    close(52)
+
+    !stop
+
+    write(*,*) "Writing phase, and amp output..."
+    !open(unit=52,file='ft_onespot'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !do k=kzvolmin-kspotextra, kzvolmax+kspotextra
+    !    do i=kxvolmin-kspotextra, kxvolmax+kspotextra
+    !        do j=kyvolmin-kspotextra, kyvolmax+kspotextra
+    !            write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
+    !        enddo
+    !    enddo
+    !    write(52,*)
+    !enddo
+    !close(52)
+    !open(unit=52,file='amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !do k=1, nkx
+    !    do i=1, nkx
+    !        do j=1, nky
+    !            write(52,"(1f14.6)",advance='no') real(skgrid(i,j,k))
+    !        enddo
+    !    enddo
+    !    write(52,*)
+    !enddo
+    !close(52)
+    !open(unit=52,file='phase'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !do k=1, nkz
+    !    do i=1, nkx
+    !        do j=1, nky
+    !            !write(52,"(1f50.6)",advance='no') aimag(skgrid(i,j,k))
+    !            write(52,"(1f14.6)",advance='no') atan2(real(skgrid(i,j,k)),aimag(skgrid(i,j,k)))
+    !        enddo
+    !    enddo
+    !    write(52,*)
+    !enddo
+    !close(52)
 
     write(*,*) "Calculating IFT..."
     !$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
@@ -349,7 +395,7 @@ program ft3d
     enddo
 
     write(*,*) "Writing mgrid..."
-    open(unit=52,file='mgrid.gfx',form='formatted',status='unknown')
+    open(unit=52,file='mgrid'//trim(jobID)//'.gfx',form='formatted',status='unknown')
     do k=1, nkz
         do i=1, nkx
             do j=1, nky
@@ -360,6 +406,27 @@ program ft3d
         write(52,*)
     enddo
     close(52)
+    !open(unit=52,file='ift_amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !do k=1, nkx
+    !    do i=1, nkx
+    !        do j=1, nky
+    !            write(52,"(1f14.6)",advance='no') real(mgrid(i,j,k))
+    !        enddo
+    !    enddo
+    !    write(52,*)
+    !enddo
+    !close(52)
+    !open(unit=52,file='ift_phase'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !do k=1, nkz
+    !    do i=1, nkx
+    !        do j=1, nky
+    !            !write(52,"(1f50.6)",advance='no') aimag(mgrid(i,j,k))
+    !            write(52,"(1f14.6)",advance='no') atan2(real(mgrid(i,j,k)),aimag(mgrid(i,j,k)))
+    !        enddo
+    !    enddo
+    !    write(52,*)
+    !enddo
+    !close(52)
     
 
 end program ft3d
