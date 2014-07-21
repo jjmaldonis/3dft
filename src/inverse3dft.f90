@@ -75,12 +75,9 @@ program ft3d
     write(*,*) "Calculating for",numspots,"spots"
     do s=1,numspots
     read(50,*) outbase
-    read(50,*) kxvolmin
-    read(50,*) kxvolmax 
-    read(50,*) kyvolmin 
-    read(50,*) kyvolmax 
-    read(50,*) kzvolmin 
-    read(50,*) kzvolmax 
+    read(50,*) kxvolmin, kxvolmax 
+    read(50,*) kyvolmin, kyvolmax 
+    read(50,*) kzvolmin, kzvolmax 
 
     call read_model(trim(modelfile), m, istat)
     !call read_model("alsm_New8C0.xyz", m, istat)

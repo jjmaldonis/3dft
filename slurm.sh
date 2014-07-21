@@ -23,7 +23,7 @@ echo "Submit directory: $SLURM_SUBMIT_DIR"
 echo ""
 
 # Executable
-mpiexec inverse3dft $SLURM_JOB_ID paramfile_t1_temp
+mpiexec inverse3dft $SLURM_JOB_ID paramfile_t1
 
 echo "Finished on:"
 date '+%s'

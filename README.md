@@ -1,3 +1,19 @@
+####Paramfile setup:
+The first line should be the input modelfile
+
+The second line should be the number of spots to be run
+
+Thereafter, you specify each spot with four lines:
+
+1) basename for the output spot files (e.g. t1_spot1_)
+
+2) xmin xmax xcenter # The center positions should be specified with as much accuracy as possible, and they do not need to match the number of pixels being used in the IFT
+
+3) ymin ymax ycenter
+
+4) zmin zmax zcenter
+
+
 ####Operation of analysis:
 The run-times discussed here are based on using 256 pixels. If you are using more, you will have to do more on aci by submitting jobs.
 
