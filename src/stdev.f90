@@ -12,11 +12,22 @@ program stdev
     double precision, dimension(:,:,:), allocatable :: ikgrid, stddevdat
     double precision, dimension(:), allocatable :: temp
     double precision :: mean, sdev, s, x
+    character (len=256) :: mgridfile, c
+    integer :: length, istat
+
+    call get_command_argument(1, c, length, istat)
+    if (istat == 0) then
+        mgridfile = trim(c)
+    else
+        mgridfile = 'mgrid.gfx'
+    end if
+
+    write(*,*) "Got mgrid file:", trim(mgridfile)
 
     radius = 8
     allocate(temp((2*radius+1)**3))
 
-    open(unit=52,file='mgrid.gfx',form='formatted',status='unknown')
+    open(unit=52,file=trim(mgridfile),form='formatted',status='unknown')
     do
         read(52,*,iostat=reason) x
         if(reason > 0) then

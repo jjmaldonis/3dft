@@ -2,7 +2,12 @@
 double precision function hanning(x,ending)
     double precision, intent(in) :: x,ending
     double precision :: temp
-    hanning = 0.5*(cos((2.0*3.1415926536*x)/(2*ending))+1)
+    if(x > ending) then
+        hanning = 0.0
+    else
+        hanning = 0.5*(cos((2.0*3.1415926536*x)/(2*ending))+1)
+        ! The period is what's on the bottom, so 2*ending
+    endif
 end function hanning
 
 
@@ -27,7 +32,7 @@ program ft3d
     double precision :: kzvolmin, kzvolmax
     double precision :: drx, dry, drz
     double precision :: kspotextra, maxdk
-    integer :: i,j,k,n, ii,jj,kk ! Counters
+    integer :: i,j,k,n,s, ii,jj,kk ! Counters
     double precision, dimension(:,:,:), allocatable :: kgrid, ikgrid
     complex(kind=8), dimension(:,:,:), allocatable :: skgrid, mgrid
     complex :: sk
@@ -47,6 +52,8 @@ program ft3d
     logical :: use_window = .true.
     integer :: length
     character (len=32) :: jobID, c
+    character (len=256) :: modelfile, paramfile, outbase
+    integer :: numspots
 
     call get_command_argument(1, c, length, istat)
     if (istat == 0) then
@@ -54,12 +61,35 @@ program ft3d
     else
         jobID = ''
     end if
+    call get_command_argument(2, c, length, istat)
+    if (istat == 0) then
+        paramfile = trim(c)
+    else
+        paramfile = 'param_file.in'
+    end if
 
+    open(unit=50,file=trim(paramfile),form='formatted',status='unknown')
+    read(50,'(A256)') modelfile; modelfile = adjustl(trim(modelfile))
+    read(50,*) numspots
+    write(*,*) "Using modelfile: ", trim(modelfile)
+    write(*,*) "Calculating for",numspots,"spots"
+    do s=1,numspots
+    read(50,*) outbase
+    read(50,*) kxvolmin
+    read(50,*) kxvolmax 
+    read(50,*) kyvolmin 
+    read(50,*) kyvolmax 
+    read(50,*) kzvolmin 
+    read(50,*) kzvolmax 
+
+    call read_model(trim(modelfile), m, istat)
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
     !call read_model("al_chunk.xyz", m, istat)
     !call read_model("al_chunk_offcenter.xyz", m, istat)
-    call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t1_final.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t2_final.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
     !call read_model("Zr50Cu35Al15_t3_final_xtal_cut.xyz", m, istat)
     !call read_model("sc_4.0.xyz", m, istat)
     call read_f_e
@@ -117,12 +147,12 @@ program ft3d
     !kzvolmin = 61
     !kzvolmax = 67
     ! Variable #2=81,90; 0=124,133; 1=103,112; 3=60,69, 4=38,47
-    kxvolmin = 124
-    kxvolmax = 133
-    kyvolmin = 124
-    kyvolmax = 133
-    kzvolmin = 103
-    kzvolmax = 112
+    !kxvolmin = 124
+    !kxvolmax = 133
+    !kyvolmin = 124
+    !kyvolmax = 133
+    !kzvolmin = 103
+    !kzvolmax = 112
     !kxvolmin = 87
     !kxvolmax = 102
     !kyvolmin = 87
@@ -134,10 +164,6 @@ program ft3d
     allstart = -1.5
     write(*,*) "Number of pixels used:", allbinsize
     write(*,*) "k-range:", -allstart, allstart
-    write(*,*) "Selected spot:"
-    write(*,*) "x:", kxvolmin,kxvolmax
-    write(*,*) "y:", kyvolmin,kyvolmax
-    write(*,*) "z:", kzvolmin,kzvolmax
 
     kminx = allstart
     kmaxx = -allstart
@@ -164,17 +190,14 @@ program ft3d
     write(*,*) "    kz: start:",kminz, "step:", dkz
 
 
-    allocate(skgrid(nkx,nky,nkz))
-    allocate(mgrid(nkx,nky,nkz))
-    allocate(ikgrid(nkx,nky,nkz))
+    if(.not. allocated(skgrid)) allocate(skgrid(nkx,nky,nkz))
+    if(.not. allocated(mgrid)) allocate(mgrid(nkx,nky,nkz))
+    if(.not. allocated(ikgrid)) allocate(ikgrid(nkx,nky,nkz))
     skgrid = (0.0,0.0)
     mgrid = (0.0,0.0)
     ikgrid = 0.0
 
     write(*,*) "Calculating FT..."
-    kxc = (kxvolmax - kxvolmin)/2.0 + kxvolmin
-    kyc = (kyvolmax - kyvolmin)/2.0 + kyvolmin
-    kzc = (kzvolmax - kzvolmin)/2.0 + kzvolmin
     !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
     !do i=1,nkx
     do i=kxvolmin, kxvolmax
@@ -191,8 +214,8 @@ program ft3d
                     sk = f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp)
                     !sk = cdexp(cpi2*dp)
                     skgrid(i,j,k) = skgrid(i,j,k) + sk
-                    !skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk)
-                    skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) + conjg(sk)
+                    !skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk) ! 512 pix
+                    skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) + conjg(sk) ! 256 pix
                 enddo
             enddo
         enddo
@@ -201,6 +224,13 @@ program ft3d
     !$omp end parallel do
 
     if(use_window) then
+    write(*,*) "Selected spot:"
+    write(*,*) "x:", kxvolmin,kxvolmax
+    write(*,*) "y:", kyvolmin,kyvolmax
+    write(*,*) "z:", kzvolmin,kzvolmax
+    kxc = (kxvolmax - kxvolmin)/2.0 + kxvolmin
+    kyc = (kyvolmax - kyvolmin)/2.0 + kyvolmin
+    kzc = (kzvolmax - kzvolmin)/2.0 + kzvolmin
     ! Hanning window
     write(*,*) "Calculating the Hanning window..."
     ! Set up
@@ -212,7 +242,7 @@ program ft3d
     kzc = (kzvolmax - kzvolmin)/2.0 + kzvolmin
     write(*,*) "Box center:",kxc,kyc,kzc
     maxdk = max(kxvolmax-kxvolmin,kyvolmax-kyvolmin,kzvolmax-kzvolmin)
-    kspotextra = 3.0/2.0*maxdk /4.0
+    kspotextra = anint(3.0/2.0*maxdk /4.0)
     facecoords(1,:) = (/kxvolmin,kyc,kzc/)
     facecoords(2,:) = (/kxc,kyvolmin,kzc/)
     facecoords(3,:) = (/kxc,kyc,kzvolmin/)
@@ -306,31 +336,31 @@ program ft3d
         enddo
     enddo
 
-    write(*,*) "Writing ft output..."
-    open(unit=52,file='ft'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    do k=1, nkz
-        do i=1, nkx
-            do j=1, nky
-                write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
-            enddo
-        enddo
-        write(52,*)
-    enddo
-    close(52)
-
-    !stop
-
-    write(*,*) "Writing phase, and amp output..."
-    !open(unit=52,file='ft_onespot'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    !do k=kzvolmin-kspotextra, kzvolmax+kspotextra
-    !    do i=kxvolmin-kspotextra, kxvolmax+kspotextra
-    !        do j=kyvolmin-kspotextra, kyvolmax+kspotextra
+    !write(*,*) "Writing ft output..."
+    !open(unit=52,file=trim(outbase)//'ft'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !do k=1, nkz
+    !    do i=1, nkx
+    !        do j=1, nky
     !            write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
     !        enddo
     !    enddo
     !    write(52,*)
     !enddo
     !close(52)
+
+    !stop
+
+    write(*,*) "Writing ft+kspotextra for a single spot..."
+    open(unit=52,file=trim(outbase)//'ft_onespot'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    do k=kzvolmin-kspotextra, kzvolmax+kspotextra
+        do i=kxvolmin-kspotextra, kxvolmax+kspotextra
+            do j=kyvolmin-kspotextra, kyvolmax+kspotextra
+                write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
     !open(unit=52,file='amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
     !do k=1, nkx
     !    do i=1, nkx
@@ -395,7 +425,7 @@ program ft3d
     enddo
 
     write(*,*) "Writing mgrid..."
-    open(unit=52,file='mgrid'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    open(unit=52,file=trim(outbase)//'mgrid'//trim(jobID)//'.gfx',form='formatted',status='unknown')
     do k=1, nkz
         do i=1, nkx
             do j=1, nky
@@ -427,6 +457,8 @@ program ft3d
     !    write(52,*)
     !enddo
     !close(52)
+    enddo
+    close(50)
     
 
 end program ft3d

@@ -36,16 +36,18 @@ program ft3d
     !call read_model("alsm_New8C0.xyz", m, istat)
     !call read_model("al_3x3x3.xyz", m, istat)
     !call read_model("al_chunk.xyz", m, istat)
-    call read_model("al_chunk_offcenter.xyz", m, istat)
+    !call read_model("al_chunk_offcenter.xyz", m, istat)
     !call read_model("Zr50Cu35Al15_t3_final.xyz", m, istat)
     !call read_model("ZCA_t3_xtal.xyz", m, istat)
     !call read_model("xtal.t3.opposite.xyz", m, istat)
     !call read_model("icolike.t3.xyz", m, istat)
     !call read_model("mixed.xyz", m, istat)
     !call read_model("mixed_icolike.xyz", m, istat)
+    !call read_model("Zr50Cu35Al15_t3_final_xtal_cut.xyz", m, istat)
+    call read_model("sc_4.0.xyz", m, istat)
     call read_f_e
 
-    allbinsize = 128
+    allbinsize = 256
     allstart = -1.5
 
     kminx = allstart
@@ -95,7 +97,7 @@ program ft3d
                     !sk = f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp)
                     sk = cdexp(cpi2*dp)
                     skgrid(i,j,k) = skgrid(i,j,k) + sk
-                    !skgrid(nkx-i,nky-j,nkz-k+1) = skgrid(nkx-i,nky-j,nkz-k+1) + conjg(sk)
+                    skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk)
                     !skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk)
                 enddo
             enddo
@@ -116,11 +118,13 @@ program ft3d
     enddo
 
     write(*,*) "Writing output..."
+    open(unit=52,file='out.gfx',form='formatted',status='unknown')
+    !open(unit=52,file='Zr50Cu35Al15_t3_final_xtal_cut.gfx',form='formatted',status='unknown')
     !open(unit=52,file='Zr50_t3_256.gfx',form='formatted',status='unknown')
     !open(unit=52,file='Zr50_t3_64.gfx',form='formatted',status='unknown')
     !open(unit=52,file='al_3x3x3.gfx',form='formatted',status='unknown')
     !open(unit=52,file='al_chunk.gfx',form='formatted',status='unknown')
-    open(unit=52,file='al_chunk_offcenter.gfx',form='formatted',status='unknown')
+    !open(unit=52,file='al_chunk_offcenter.gfx',form='formatted',status='unknown')
     !open(unit=52,file='ZCA_t3_xtal.gfx',form='formatted',status='unknown')
     !open(unit=52,file='xtal.t3.opposite.gfx',form='formatted',status='unknown')
     !open(unit=52,file='icolike.t3.gfx',form='formatted',status='unknown')

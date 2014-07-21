@@ -2,17 +2,17 @@
 
 FC = ifort
 FCFLAGS = -O2 -openmp -fpp
-#FCFLAGS = -g -debug all -check all -implicitnone -warn all -fpp
+#FCFLAGS = -g -debug all -check all -implicitnone -warn all -fpp -openmp
 
 SRC = gfx.f90 model_v2.f90 scattering_factors.f90
 OBJ = $(addsuffix .o, $(basename $(SRC)))
-ft: APP = 3dft
+ft: APP = ../3dft
 ft: SRC = gfx.f90 model_v2.f90 scattering_factors.f90 3dft.f90
 ft: OBJ = $(addsuffix .o, $(basename $(SRC)))
-ift: APP = inverse3dft
+ift: APP = ../inverse3dft
 ift: SRC = gfx.f90 model_v2.f90 scattering_factors.f90 inverse3dft.f90
 ift: OBJ = $(addsuffix .o, $(basename $(SRC)))
-stdev: APP = stdev
+stdev: APP = ../stdev
 stdev: SRC = gfx.f90 model_v2.f90 scattering_factors.f90 stdev.f90
 stdev: OBJ = $(addsuffix .o, $(basename $(SRC)))
 
