@@ -3,15 +3,17 @@ import subprocess
 from lines_to_3d_wave import lines_to_3d_wave
 sys.path.insert(0, '/home/maldonis/model_analysis/scripts')
 from ift_atom_selection import atom_selection
-from 3d_rot import calc_rot_array_from_hkl, rot
+from rot_3d import calc_rot_array_from_hkl, rot
 from model import Model
 
 def main():
-    if(len(sys.argv) != 3):
-        raise Exception("Usage: paramfile, jobid")
+    if(len(sys.argv) != 4):
+        raise Exception("Usage: paramfile, jobid, npix for center positions of spots")
     paramfile = sys.argv[1]
     jobid = sys.argv[2]
-    types = ['mgrid','ft_onespot']
+    npix = int(sys.argv[3])
+    #types = ['mgrid','ft_onespot1','ft_onespot2']
+    types = ['mgrid']
     with open(paramfile) as f:
         params = f.readlines()
     params = [x.strip() for x in params]
@@ -25,23 +27,23 @@ def main():
             file = prefix + '.gfx'
             lines_to_3d_wave(file, prefix + '.txt')
             if(t == 'mgrid'):
-                p = subprocess.Popen(['/home/maldonis/3dft/stdev',file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                for nextline in iter(p.stdout.readline, ""):
-                    sys.stdout.write(nextline)
-                    sys.stdout.flush()
-                poutput = p.stdout.read()
-                perr = p.stderr.read()
-                preturncode = p.wait()
-                if(preturncode != 0):
-                    print("stdev exit status: "+str(preturncode))
-                    raise Exception("stdev failed on file {0}!".format(file)+perr)
+                #p = subprocess.Popen(['/home/maldonis/3dft/stdev',file,jobid], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                #for nextline in iter(p.stdout.readline, ""):
+                #    sys.stdout.write(nextline)
+                #    sys.stdout.flush()
+                #poutput = p.stdout.read()
+                #perr = p.stderr.read()
+                #preturncode = p.wait()
+                #if(preturncode != 0):
+                #    print("stdev exit status: "+str(preturncode))
+                #    raise Exception("stdev failed on file {0}!".format(file)+perr)
                 new_model_file_base_name = params[j] + jobid
-                atom_selection(modelfile, 'stdev.gfx', new_model_file_base_name)
+                atom_selection(modelfile, 'stdev_'+jobid+'.gfx', 512, new_model_file_base_name)
                 xc = int(params[j+1].split()[2])
                 yc = int(params[j+2].split()[2])
                 zc = int(params[j+3].split()[2])
                 m = Model(new_model_file_base_name+'.xyz')
-                rot_arr = calc_rot_array_from_hkl(xc,yc,zc)
+                rot_arr = calc_rot_array_from_hkl(npix/2-xc,npix/2-yc,npix/2-zc)
                 rot(m,rot_arr)
                 m.write_real_xyz(new_model_file_base_name+'.rotated.real.xyz')
                 print('')

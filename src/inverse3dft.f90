@@ -10,6 +10,14 @@ double precision function hanning(x,ending)
     endif
 end function hanning
 
+double precision function gauss3d(x,y,z,x0,y0,z0,sx,sy,sz,cxy,cxz,cyz)
+    gauss3d = exp(  -1/(2* (-1+cxy**2+cxz**2+cyz**2-2*cxy*cxz*cyz)) * &
+    ( (cyz**2-1)*(x-x0)**2/sx**2 + (cxz**2-1)*(y-y0)**2/sy**2 + (cxy**2-1)*(z-z0)**2/sz**2 + &
+    (2*cxy*(x-x0)*(y-y0)-2*cxz*cyz*(x-x0)*(y-y0))/(sx*sy) + &
+    (2*cxz*(x-x0)*(z-z0)-2*cxy*cyz*(x-x0)*(z-z0))/(sx*sz) + &
+    (2*cyz*(y-y0)*(z-z0)-2*cxy*cxz*(y-y0)*(z-z0))/(sy*sz) )  )
+end function gauss3d
+
 
 program ft3d
     use model_mod
@@ -21,7 +29,6 @@ program ft3d
     complex(kind=8), parameter :: cpi = (0.0,pi)
     complex(kind=8), parameter :: cpi2 = 2*cpi
     type(model) :: m
-    character (len=256) :: model_filename
     integer :: istat
     double precision:: kminx, kmaxx, dkx
     double precision:: kminy, kmaxy, dky
@@ -32,7 +39,7 @@ program ft3d
     double precision :: kzvolmin, kzvolmax
     double precision :: drx, dry, drz
     double precision :: kspotextra, maxdk
-    integer :: i,j,k,n,s, ii,jj,kk ! Counters
+    integer :: i,j,k,n,s, l, ii,jj,kk ! Counters
     double precision, dimension(:,:,:), allocatable :: kgrid, ikgrid
     complex(kind=8), dimension(:,:,:), allocatable :: skgrid, mgrid
     complex :: sk
@@ -42,11 +49,11 @@ program ft3d
     double precision :: kxradius, kyradius, kzradius
     ! Average intensities of each face, total average intensity, and final intensity
     complex(kind=8) :: ifx1, ifx2, ify1, ify2, ifz1, ifz2, i0, if0, a0, b0
-    integer :: allbinsize
+    integer :: npix
     integer :: binx, biny, binz
     double precision :: allstart
     double precision :: hanning
-    !complex :: hanning
+    double precision :: gauss3d
     double precision, dimension(6,3) :: facecoords ! fx1, fy1, fz1, fx2, fy2, fz2
     double precision :: dist,mindist
     logical :: use_window = .true.
@@ -54,19 +61,29 @@ program ft3d
     character (len=32) :: jobID, c
     character (len=256) :: modelfile, paramfile, outbase
     integer :: numspots
+    integer :: nthr, tid
+    integer :: x0,y0,z0
+    double precision :: sx, sy, sz, cxy, cxz, cyz
+
+    nthr = omp_get_num_threads()
+    !$omp parallel private(tid)
+    tid = omp_get_thread_num()
+    !$omp end parallel
 
     call get_command_argument(1, c, length, istat)
     if (istat == 0) then
         jobID = "_"//trim(c)
     else
-        jobID = ''
+        error stop "No jobid given. Usage is: ./inverse3dft jobid paramfile"
     end if
     call get_command_argument(2, c, length, istat)
     if (istat == 0) then
         paramfile = trim(c)
     else
-        paramfile = 'param_file.in'
+        error stop "No parameter file given. Usage is: ./inverse3dft jobid paramfile"
     end if
+    write(*,*) "JobID: ",trim(jobid)
+    write(*,*) "Paramfile name: ",trim(paramfile)
 
     open(unit=50,file=trim(paramfile),form='formatted',status='unknown')
     read(50,'(A256)') modelfile; modelfile = adjustl(trim(modelfile))
@@ -75,6 +92,10 @@ program ft3d
     write(*,*) "Calculating for",numspots,"spots"
     do s=1,numspots
     read(50,*) outbase
+    write(*,*) "Analyzing spot ", outbase
+    read(50,*) x0, y0, z0
+    read(50,*) sx, sy, sz
+    read(50,*) cxy, cxz, cyz
     read(50,*) kxvolmin, kxvolmax 
     read(50,*) kyvolmin, kyvolmax 
     read(50,*) kzvolmin, kzvolmax 
@@ -157,26 +178,22 @@ program ft3d
     !kzvolmin = 87
     !kzvolmax = 102
     ! For the whole simulations
-    allbinsize = 256
+    npix = 256
     allstart = -1.5
-    write(*,*) "Number of pixels used:", allbinsize
+    write(*,*) "Number of pixels used:", npix
     write(*,*) "k-range:", -allstart, allstart
-
     kminx = allstart
     kmaxx = -allstart
-    nkx = allbinsize
+    nkx = npix
     dkx = (kmaxx-kminx)/float(nkx)
-
     kminy = allstart
     kmaxy = -allstart
-    nky = allbinsize
+    nky = npix
     dky = (kmaxy-kminy)/float(nky)
-
     kminz = allstart
     kmaxz = -allstart
-    nkz = allbinsize
+    nkz = npix
     dkz = (kmaxz-kminz)/float(nkz)
-
     drx = m%lx/nkx
     dry = m%ly/nky
     drz = m%lz/nkz
@@ -185,7 +202,6 @@ program ft3d
     write(*,*) "    kx: start:",kminx, "step:", dkx
     write(*,*) "    ky: start:",kminy, "step:", dky
     write(*,*) "    kz: start:",kminz, "step:", dkz
-
 
     if(.not. allocated(skgrid)) allocate(skgrid(nkx,nky,nkz))
     if(.not. allocated(mgrid)) allocate(mgrid(nkx,nky,nkz))
@@ -202,17 +218,17 @@ program ft3d
         !do j=1,nky
         do j=kyvolmin, kyvolmax
             dpy = (kminy+j*dky)
-            !do k=1,nkz
+            !do k=0,nkz/2
             do k=kzvolmin, kzvolmax
                 dpz = (kminz+k*dkz)
                 kvec = sqrt(dpx**2+dpy**2+dpz**2)
                 do n=1, m%natoms
                     dp = dpx*m%xx%ind(n) + dpy*m%yy%ind(n) + dpz*m%zz%ind(n)
                     sk = f_e(m%znum%ind(n),kvec) * cdexp(cpi2*dp)
-                    !sk = cdexp(cpi2*dp)
-                    skgrid(i,j,k) = skgrid(i,j,k) + sk
-                    !skgrid(nkx-i+1,nky-j+1,nkz-k+1) = skgrid(nkx-i+1,nky-j+1,nkz-k+1) + conjg(sk) ! 512 pix
-                    skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) + conjg(sk) ! 256 pix
+                    if( k/= 0) skgrid(i,j,k) = skgrid(i,j,k) + sk
+                    if(i /= nkx .and. j /= nky .and. k /= nkz .and. k /= nkz*0.5) then
+                        skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) + conjg(sk)
+                    endif
                 enddo
             enddo
         enddo
@@ -220,17 +236,16 @@ program ft3d
     enddo
     !$omp end parallel do
 
+    ! Gaussian window
     if(use_window) then
     write(*,*) "Selected spot:"
     write(*,*) "x:", kxvolmin,kxvolmax
     write(*,*) "y:", kyvolmin,kyvolmax
     write(*,*) "z:", kzvolmin,kzvolmax
-    kxc = (kxvolmax - kxvolmin)/2.0 + kxvolmin
-    kyc = (kyvolmax - kyvolmin)/2.0 + kyvolmin
-    kzc = (kzvolmax - kzvolmin)/2.0 + kzvolmin
-    ! Hanning window
-    write(*,*) "Calculating the Hanning window..."
-    ! Set up
+    write(*,*) "x:", npix-kxvolmin,npix-kxvolmax
+    write(*,*) "y:", npix-kyvolmin,npix-kyvolmax
+    write(*,*) "z:", npix-kzvolmin,npix-kzvolmax
+    write(*,*) "Applying the Gaussian window..."
     kxradius = (kxvolmax - kxvolmin)/2.0
     kyradius = (kyvolmax - kyvolmin)/2.0
     kzradius = (kzvolmax - kzvolmin)/2.0
@@ -238,86 +253,19 @@ program ft3d
     kyc = (kyvolmax - kyvolmin)/2.0 + kyvolmin
     kzc = (kzvolmax - kzvolmin)/2.0 + kzvolmin
     write(*,*) "Box center:",kxc,kyc,kzc
-    maxdk = max(kxvolmax-kxvolmin,kyvolmax-kyvolmin,kzvolmax-kzvolmin)
-    kspotextra = anint(3.0/2.0*maxdk /4.0)
-    facecoords(1,:) = (/kxvolmin,kyc,kzc/)
-    facecoords(2,:) = (/kxc,kyvolmin,kzc/)
-    facecoords(3,:) = (/kxc,kyc,kzvolmin/)
-    facecoords(4,:) = (/kxvolmax,kyc,kzc/)
-    facecoords(5,:) = (/kxc,kyvolmax,kzc/)
-    facecoords(6,:) = (/kxc,kyc,kzvolmax/)
-
-    ! Calculate the average for each face
-    ! Based on the max of the face
-    ifx1 = 0.0
-    do j=kyvolmin, kyvolmax
-        do k=kzvolmin, kzvolmax
-            if(cdabs(skgrid(kxvolmin,j,k)) > cdabs(ifx1)) ifx1 = skgrid(kxvolmin,j,k)
-        enddo
-    enddo
-    ify1 = 0.0
-    do i=kxvolmin, kxvolmax
-        do k=kzvolmin, kzvolmax
-            if(cdabs(skgrid(i,kyvolmin,k)) > cdabs(ify1)) ify1 = skgrid(i,kyvolmin,k)
-        enddo
-    enddo
-    ifz1 = 0.0
-    do i=kxvolmin, kxvolmax
-        do j=kyvolmin, kyvolmax
-            if(cdabs(skgrid(i,j,kzvolmin)) > cdabs(ifz1)) ifz1 = skgrid(i,j,kzvolmin)
-        enddo
-    enddo
-    ifx2 = 0.0
-    do j=kyvolmin, kyvolmax
-        do k=kzvolmin, kzvolmax
-            if(cdabs(skgrid(kxvolmax,j,k)) > cdabs(ifx2)) ifx2 = skgrid(kxvolmax,j,k)
-        enddo
-    enddo
-    ify2 = 0.0
-    do i=kxvolmin, kxvolmax
-        do k=kzvolmin, kzvolmax
-            if(cdabs(skgrid(i,kyvolmax,k)) > cdabs(ify2)) ify2 = skgrid(i,kyvolmax,k)
-        enddo
-    enddo
-    ifz2 = 0.0
-    do i=kxvolmin, kxvolmax
-        do j=kyvolmin, kyvolmax
-            if(cdabs(skgrid(i,j,kzvolmax)) > cdabs(ifz2)) ifz2 = skgrid(i,j,kzvolmax)
-        enddo
-    enddo
-
-    i0 = (ifx1 + ifx2 + ify1 + ify2 + ifz1 + ifz2)/6.0
-    if0 = i0
-
-    ! Now create the Hanning window
+    write(*,*) "Box sizes:"
     write(*,*) "x:", kxvolmin-kspotextra, kxvolmax+kspotextra
     write(*,*) "y:", kyvolmin-kspotextra, kyvolmax+kspotextra
     write(*,*) "z:", kzvolmin-kspotextra, kzvolmax+kspotextra
-    write(*,*) "x:", allbinsize-(kxvolmin-kspotextra), allbinsize-(kxvolmax+kspotextra)
-    write(*,*) "y:", allbinsize-(kyvolmin-kspotextra), allbinsize-(kyvolmax+kspotextra)
-    write(*,*) "z:", allbinsize-(kzvolmin-kspotextra), allbinsize-(kzvolmax+kspotextra)
-    write(*,*) "kspotextra", kspotextra
-    write(*,*) "i0", i0, cdabs(i0)
-    write(*,*) "if0", if0, cdabs(if0)
-    write(*,*) "Ifaces", (ifx1), (ifx2), (ify1), (ify2), (ifz1), (ifz2)
-    write(*,*) "Ifaces", cdabs(ifx1), cdabs(ifx2), cdabs(ify1), cdabs(ify2), cdabs(ifz1), cdabs(ifz2)
+    write(*,*) "x:", npix-(kxvolmin-kspotextra), npix-(kxvolmax+kspotextra)
+    write(*,*) "y:", npix-(kyvolmin-kspotextra), npix-(kyvolmax+kspotextra)
+    write(*,*) "z:", npix-(kzvolmin-kspotextra), npix-(kzvolmax+kspotextra)
     !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
     do i=kxvolmin-kspotextra, kxvolmax+kspotextra
         do j=kyvolmin-kspotextra, kyvolmax+kspotextra
             do k=kzvolmin-kspotextra, kzvolmax+kspotextra
-                if(i<kxvolmin .or. i>kxvolmax .or. j<kyvolmin .or.  j>kyvolmax .or. k<kzvolmin .or. k>kzvolmax) then
-                    mindist = 9999999999.0
-                    do n=1,6
-                        dist = (i-facecoords(n,1))**2 + (j-facecoords(n,2))**2 + (k-facecoords(n,3))**2
-                        if(dist < mindist) mindist = dist
-                    enddo
-                    mindist = sqrt(mindist)
-                    if( mindist .le. kspotextra) then
-                        sk = if0*hanning(mindist,kspotextra+2)
-                        skgrid(i,j,k) = sk
-                        skgrid(nkx-i,nky-j,nkz-k) = conjg(sk)
-                    endif
-                endif
+                skgrid(i,j,k) = skgrid(i,j,k) * gauss3d(i,j,k,x0,y0,z0,sx,sy,sz,cxy,cxz,cyz)
+                skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) * gauss3d(i,j,k,x0,y0,z0,sx,sy,sz,cxy,cxz,cyz)
             enddo
         enddo
     enddo
@@ -335,6 +283,7 @@ program ft3d
 
     !write(*,*) "Writing ft output..."
     !open(unit=52,file=trim(outbase)//'ft'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !write(52,*) npix, npix, npix
     !do k=1, nkz
     !    do i=1, nkx
     !        do j=1, nky
@@ -348,7 +297,8 @@ program ft3d
     !stop
 
     write(*,*) "Writing ft+kspotextra for a single spot..."
-    open(unit=52,file=trim(outbase)//'ft_onespot'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    open(unit=52,file=trim(outbase)//'ft_onespot1'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) kxradius*2, kyradius*2, kzradius*2
     do k=kzvolmin-kspotextra, kzvolmax+kspotextra
         do i=kxvolmin-kspotextra, kxvolmax+kspotextra
             do j=kyvolmin-kspotextra, kyvolmax+kspotextra
@@ -358,7 +308,23 @@ program ft3d
         write(52,*)
     enddo
     close(52)
+    open(unit=52,file=trim(outbase)//'ft_onespot2'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) kxradius*2, kyradius*2, kzradius*2
+    ! NOTE: This prints in opposite order, so the spots should LOOK the exact same
+    do k=kzvolmin-kspotextra, kzvolmax+kspotextra
+        do i=kxvolmin-kspotextra, kxvolmax+kspotextra
+            do j=kyvolmin-kspotextra, kyvolmax+kspotextra
+    !do k=kzvolmax+kspotextra, kzvolmin-kspotextra, -1
+    !    do i=kxvolmax+kspotextra, kxvolmin-kspotextra, -1
+    !        do j=kyvolmax+kspotextra, kyvolmin-kspotextra, -1
+                write(52,"(1f14.6)",advance='no') ikgrid(nkx-i,nky-j,nkz-k)
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
     !open(unit=52,file='amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !write(52,*) npix, npix, npix
     !do k=1, nkx
     !    do i=1, nkx
     !        do j=1, nky
@@ -369,6 +335,7 @@ program ft3d
     !enddo
     !close(52)
     !open(unit=52,file='phase'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !write(52,*) npix, npix, npix
     !do k=1, nkz
     !    do i=1, nkx
     !        do j=1, nky
@@ -381,6 +348,7 @@ program ft3d
     !close(52)
 
     write(*,*) "Calculating IFT..."
+    l = 0
     !$omp parallel do private(i,j,k,ii,jj,kk,dpx,dpy,dpz,kvec,dp,sk) shared(mgrid)
     do i=1, nkx
         !dpx = (kminx+i*dkx)
@@ -395,7 +363,6 @@ program ft3d
                 do ii=kxvolmin-kspotextra, kxvolmax+kspotextra
                 do jj=kyvolmin-kspotextra, kyvolmax+kspotextra
                 do kk=kzvolmin-kspotextra, kzvolmax+kspotextra
-                    !dp = dpx*((ii-0.5)*drx+m%lx/2.0) + dpy*((jj-0.5)*dry+m%ly/2.0) + dpz*((kk-0.5)*drz+m%lz/2.0)
                     dp = dpx*(kminx+ii*dkx) + dpy*(kminy+jj*dky) + dpz*(kminz+kk*dkz)
                     sk = cdexp(-cpi2*dp)*skgrid(ii,jj,kk)
                     mgrid(i,j,k) = mgrid(i,j,k) + sk
@@ -408,7 +375,8 @@ program ft3d
                 enddo
             enddo
         enddo
-        write(*,*) 100.0*i/float(nkx), "percent done with ift"
+        if(tid .eq. 0) l = l + 1
+        write(*,*) l*(100.0/npix*nthr), "percent done, from thread", omp_get_thread_num()
     enddo
     !$omp end parallel do
 
@@ -423,6 +391,7 @@ program ft3d
 
     write(*,*) "Writing mgrid..."
     open(unit=52,file=trim(outbase)//'mgrid'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) npix, npix, npix
     do k=1, nkz
         do i=1, nkx
             do j=1, nky
@@ -434,6 +403,7 @@ program ft3d
     enddo
     close(52)
     !open(unit=52,file='ift_amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !write(52,*) npix, npix, npix
     !do k=1, nkx
     !    do i=1, nkx
     !        do j=1, nky
@@ -444,6 +414,7 @@ program ft3d
     !enddo
     !close(52)
     !open(unit=52,file='ift_phase'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !write(52,*) npix, npix, npix
     !do k=1, nkz
     !    do i=1, nkx
     !        do j=1, nky

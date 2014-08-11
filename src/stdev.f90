@@ -12,17 +12,25 @@ program stdev
     double precision, dimension(:,:,:), allocatable :: ikgrid, stddevdat
     double precision, dimension(:), allocatable :: temp
     double precision :: mean, sdev, s, x
-    character (len=256) :: mgridfile, c
+    character (len=256) :: mgridfile, c, jobid
     integer :: length, istat
 
+    ! mgrid file, jobid
     call get_command_argument(1, c, length, istat)
     if (istat == 0) then
         mgridfile = trim(c)
     else
         mgridfile = 'mgrid.gfx'
     end if
+    call get_command_argument(2, c, length, istat)
+    if (istat == 0) then
+        jobID = "_"//trim(c)
+    else
+        jobID = ''
+    end if
 
-    write(*,*) "Got mgrid file:", trim(mgridfile)
+    write(*,*) "Got mgrid file: ", trim(mgridfile)
+    write(*,*) "Got jobID: ", trim(jobid)
 
     radius = 8
     allocate(temp((2*radius+1)**3))
@@ -105,7 +113,7 @@ program stdev
     !$omp end parallel do
     
     write(*,*) "Writing output..."
-    open(unit=52,file='stdev.gfx',form='formatted',status='unknown')
+    open(unit=52,file='stdev'//trim(jobid)//'.gfx',form='formatted',status='unknown')
     do k=1, npix
         do i=1, npix
             do j=1, npix
