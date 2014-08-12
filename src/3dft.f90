@@ -122,6 +122,7 @@ program ft3d
 
     write(*,*) "Writing FT..."
     open(unit=52,file=trim(outbase)//'ft.gfx',form='formatted',status='unknown')
+    write(52,*) npix, npix, npix
     do k=1, nkz
         do i=1, nkx
             do j=1, nky

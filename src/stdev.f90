@@ -36,18 +36,19 @@ program stdev
     allocate(temp((2*radius+1)**3))
 
     open(unit=52,file=trim(mgridfile),form='formatted',status='unknown')
-    do
-        read(52,*,iostat=reason) x
-        if(reason > 0) then
-            error stop "reason > 0. Stopping!"
-        else if(reason < 0) then
-            exit
-        else
-            numlines = numlines + 1
-        endif
-    enddo
-    rewind(52)
-    npix = numlines !anint(numlines**(1.0/3.0))
+    !do
+    !    read(52,*,iostat=reason) x
+    !    if(reason > 0) then
+    !        error stop "reason > 0. Stopping!"
+    !    else if(reason < 0) then
+    !        exit
+    !    else
+    !        numlines = numlines + 1
+    !    endif
+    !enddo
+    !rewind(52)
+    !npix = numlines-1 !anint(numlines**(1.0/3.0))
+    read(52,*) npix ! First line is npix, npix, npix (no commas)
     write(*,*) "Number of pixels in each direction (assumed to be equal):", npix
     allocate(ikgrid(npix,npix,npix))
     allocate(stddevdat(npix,npix,npix))

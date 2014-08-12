@@ -11,11 +11,16 @@ double precision function hanning(x,ending)
 end function hanning
 
 double precision function gauss3d(x,y,z,x0,y0,z0,sx,sy,sz,cxy,cxz,cyz)
-    gauss3d = exp(  -1/(2* (-1+cxy**2+cxz**2+cyz**2-2*cxy*cxz*cyz)) * &
-    ( (cyz**2-1)*(x-x0)**2/sx**2 + (cxz**2-1)*(y-y0)**2/sy**2 + (cxy**2-1)*(z-z0)**2/sz**2 + &
-    (2*cxy*(x-x0)*(y-y0)-2*cxz*cyz*(x-x0)*(y-y0))/(sx*sy) + &
-    (2*cxz*(x-x0)*(z-z0)-2*cxy*cyz*(x-x0)*(z-z0))/(sx*sz) + &
-    (2*cyz*(y-y0)*(z-z0)-2*cxy*cxz*(y-y0)*(z-z0))/(sy*sz) )  )
+    integer, intent(in) :: x,y,z
+    !double precision, intent(in) :: x,y,z
+    double precision, intent(in) :: x0,y0,z0
+    double precision, intent(in) :: sx,sy,sz
+    double precision, intent(in) :: cxy,cxz,cyz
+    gauss3d = exp(  -1.0/(2.0* (-1.0+cxy**2.0+cxz**2.0+cyz**2.0-2.0*cxy*cxz*cyz)) * &
+    ( (cyz**2.0-1.0)*(x-x0)**2.0/sx**2.0 + (cxz**2.0-1.0)*(y-y0)**2.0/sy**2.0 + (cxy**2.0-1.0)*(z-z0)**2.0/sz**2.0 + &
+    (2.0*cxy*(x-x0)*(y-y0)-2.0*cxz*cyz*(x-x0)*(y-y0))/(sx*sy) + &
+    (2.0*cxz*(x-x0)*(z-z0)-2.0*cxy*cyz*(x-x0)*(z-z0))/(sx*sz) + &
+    (2.0*cyz*(y-y0)*(z-z0)-2.0*cxy*cxz*(y-y0)*(z-z0))/(sy*sz) )  )
 end function gauss3d
 
 
@@ -62,7 +67,7 @@ program ft3d
     character (len=256) :: modelfile, paramfile, outbase
     integer :: numspots
     integer :: nthr, tid
-    integer :: x0,y0,z0
+    double precision :: x0,y0,z0
     double precision :: sx, sy, sz, cxy, cxz, cyz
 
     nthr = omp_get_num_threads()
@@ -92,13 +97,19 @@ program ft3d
     write(*,*) "Calculating for",numspots,"spots"
     do s=1,numspots
     read(50,*) outbase
-    write(*,*) "Analyzing spot ", outbase
+    write(*,*) "Analyzing spot ", trim(outbase)
     read(50,*) x0, y0, z0
     read(50,*) sx, sy, sz
     read(50,*) cxy, cxz, cyz
+    write(*,*) "x0,y0,z0",x0,y0,z0
+    write(*,*) "sx,sy,sz",sx,sy,sz
+    write(*,*) "cxy,cxz,cyz",cxy,cxz,cyz
     read(50,*) kxvolmin, kxvolmax 
     read(50,*) kyvolmin, kyvolmax 
     read(50,*) kzvolmin, kzvolmax 
+    write(*,*) "kxvolmin, kxvolmax",kxvolmin, kxvolmax
+    write(*,*) "kyvolmin, kyvolmax",kyvolmin, kyvolmax
+    write(*,*) "kzvolmin, kzvolmax",kzvolmin, kzvolmax
 
     call read_model(trim(modelfile), m, istat)
     !call read_model("alsm_New8C0.xyz", m, istat)
@@ -254,18 +265,18 @@ program ft3d
     kzc = (kzvolmax - kzvolmin)/2.0 + kzvolmin
     write(*,*) "Box center:",kxc,kyc,kzc
     write(*,*) "Box sizes:"
-    write(*,*) "x:", kxvolmin-kspotextra, kxvolmax+kspotextra
-    write(*,*) "y:", kyvolmin-kspotextra, kyvolmax+kspotextra
-    write(*,*) "z:", kzvolmin-kspotextra, kzvolmax+kspotextra
-    write(*,*) "x:", npix-(kxvolmin-kspotextra), npix-(kxvolmax+kspotextra)
-    write(*,*) "y:", npix-(kyvolmin-kspotextra), npix-(kyvolmax+kspotextra)
-    write(*,*) "z:", npix-(kzvolmin-kspotextra), npix-(kzvolmax+kspotextra)
-    !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)
-    do i=kxvolmin-kspotextra, kxvolmax+kspotextra
-        do j=kyvolmin-kspotextra, kyvolmax+kspotextra
-            do k=kzvolmin-kspotextra, kzvolmax+kspotextra
+    write(*,*) "x:", kxvolmin, kxvolmax
+    write(*,*) "y:", kyvolmin, kyvolmax
+    write(*,*) "z:", kzvolmin, kzvolmax
+    write(*,*) "x:", npix-kxvolmin, npix-kxvolmax
+    write(*,*) "y:", npix-kyvolmin, npix-kyvolmax
+    write(*,*) "z:", npix-kzvolmin, npix-kzvolmax
+    !$omp parallel do private(i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid,x0,y0,z0,sx,sy,sz,cxy,cxz,cyz)
+    do i=kxvolmin, kxvolmax
+        do j=kyvolmin, kyvolmax
+            do k=kzvolmin, kzvolmax
                 skgrid(i,j,k) = skgrid(i,j,k) * gauss3d(i,j,k,x0,y0,z0,sx,sy,sz,cxy,cxz,cyz)
-                skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) * gauss3d(i,j,k,x0,y0,z0,sx,sy,sz,cxy,cxz,cyz)
+                skgrid(nkx-i,nky-j,nkz-k) = skgrid(nkx-i,nky-j,nkz-k) * gauss3d(nkx-i,nky-j,nkz-k,nkx-x0,nky-y0,nkz-z0,sx,sy,sz,-cxy,-cxz,-cyz)
             enddo
         enddo
     enddo
@@ -296,33 +307,33 @@ program ft3d
 
     !stop
 
-    write(*,*) "Writing ft+kspotextra for a single spot..."
-    open(unit=52,file=trim(outbase)//'ft_onespot1'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    write(52,*) kxradius*2, kyradius*2, kzradius*2
-    do k=kzvolmin-kspotextra, kzvolmax+kspotextra
-        do i=kxvolmin-kspotextra, kxvolmax+kspotextra
-            do j=kyvolmin-kspotextra, kyvolmax+kspotextra
-                write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
-            enddo
-        enddo
-        write(52,*)
-    enddo
-    close(52)
-    open(unit=52,file=trim(outbase)//'ft_onespot2'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    write(52,*) kxradius*2, kyradius*2, kzradius*2
-    ! NOTE: This prints in opposite order, so the spots should LOOK the exact same
-    do k=kzvolmin-kspotextra, kzvolmax+kspotextra
-        do i=kxvolmin-kspotextra, kxvolmax+kspotextra
-            do j=kyvolmin-kspotextra, kyvolmax+kspotextra
-    !do k=kzvolmax+kspotextra, kzvolmin-kspotextra, -1
-    !    do i=kxvolmax+kspotextra, kxvolmin-kspotextra, -1
-    !        do j=kyvolmax+kspotextra, kyvolmin-kspotextra, -1
-                write(52,"(1f14.6)",advance='no') ikgrid(nkx-i,nky-j,nkz-k)
-            enddo
-        enddo
-        write(52,*)
-    enddo
-    close(52)
+    !write(*,*) "Writing ft+kspotextra for a single spot..."
+    !open(unit=52,file=trim(outbase)//'ft_onespot1'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !write(52,*) kxradius*2, kyradius*2, kzradius*2
+    !do k=kzvolmin, kzvolmax
+    !    do i=kxvolmin, kxvolmax
+    !        do j=kyvolmin, kyvolmax
+    !            write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
+    !        enddo
+    !    enddo
+    !    write(52,*)
+    !enddo
+    !close(52)
+    !open(unit=52,file=trim(outbase)//'ft_onespot2'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    !write(52,*) kxradius*2, kyradius*2, kzradius*2
+    !! NOTE: This prints in opposite order, so the spots should LOOK the exact same
+    !do k=kzvolmin, kzvolmax
+    !    do i=kxvolmin, kxvolmax
+    !        do j=kyvolmin, kyvolmax
+    !!do k=kzvolmax, kzvolmin, -1
+    !!    do i=kxvolmax, kxvolmin, -1
+    !!        do j=kyvolmax, kyvolmin, -1
+    !            write(52,"(1f14.6)",advance='no') ikgrid(nkx-i,nky-j,nkz-k)
+    !        enddo
+    !    enddo
+    !    write(52,*)
+    !enddo
+    !close(52)
     !open(unit=52,file='amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
     !write(52,*) npix, npix, npix
     !do k=1, nkx
@@ -360,9 +371,9 @@ program ft3d
                 !dpz = (kminz+k*dkz)
                 dpz = -m%lz*0.5 + k*drz
                 kvec = sqrt(dpx**2+dpy**2+dpz**2)
-                do ii=kxvolmin-kspotextra, kxvolmax+kspotextra
-                do jj=kyvolmin-kspotextra, kyvolmax+kspotextra
-                do kk=kzvolmin-kspotextra, kzvolmax+kspotextra
+                do ii=kxvolmin, kxvolmax
+                do jj=kyvolmin, kyvolmax
+                do kk=kzvolmin, kzvolmax
                     dp = dpx*(kminx+ii*dkx) + dpy*(kminy+jj*dky) + dpz*(kminz+kk*dkz)
                     sk = cdexp(-cpi2*dp)*skgrid(ii,jj,kk)
                     mgrid(i,j,k) = mgrid(i,j,k) + sk
