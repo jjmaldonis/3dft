@@ -39,7 +39,7 @@ def main():
                     print("stdev exit status: "+str(preturncode))
                     raise Exception("stdev failed on file {0}!".format(file)+perr)
                 new_model_file_base_name = params[j] + jobid
-                atom_selection(modelfile, 'stdev_'+jobid+'.gfx', 256, new_model_file_base_name)
+                worked = atom_selection(modelfile, 'stdev_'+jobid+'.gfx', 256, new_model_file_base_name)
                 x0,y0,z0 = tuple([float(x) for x in params[j+1].split()])
                 sx,sy,sz = tuple([float(x) for x in params[j+2].split()])
                 cxy,cxz,cyz = tuple([float(x) for x in params[j+3].split()])
@@ -48,11 +48,12 @@ def main():
                 zc = int(params[j+6].split()[2])
                 gvec = float(params[j+6].split()[3])
                 print("g-vector length = {0}".format(gvec))
-                print("The more correct g-vector length == {0}".format(sqrt((npix/4.0-x0)**2 + (npix/4.0-y0)**2 + (npix/4.0-z0)**2)))
-                m = Model(new_model_file_base_name+'.xyz')
-                rot_arr = calc_rot_array_from_hkl(npix/2-xc,npix/2-yc,npix/2-zc)
-                rot(m,rot_arr)
-                m.write_real_xyz(new_model_file_base_name+'.rotated.real.xyz')
+                print("The more correct g-vector length == {0}".format(sqrt((npix/4.0-x0+1)**2 + (npix/4.0-y0+1)**2 + (npix/4.0-z0)**2+1)*3.0/(npix/2)))
+                if(worked == 0):
+                    m = Model(new_model_file_base_name+'.xyz')
+                    rot_arr = calc_rot_array_from_hkl(npix/2-xc,npix/2-yc,npix/2-zc)
+                    rot(m,rot_arr)
+                    m.write_real_xyz(new_model_file_base_name+'.rotated.real.xyz')
                 print('')
 
 
