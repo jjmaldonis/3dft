@@ -115,6 +115,7 @@ program stdev
     
     write(*,*) "Writing output..."
     open(unit=52,file='stdev'//trim(jobid)//'.gfx',form='formatted',status='unknown')
+    write(52,*) npix, npix, npix
     do k=1, npix
         do i=1, npix
             do j=1, npix
