@@ -5,9 +5,11 @@ def lines_to_3d_wave(infile,outfile):
     """ takes a 3d matrix (of equal dimensions) written out on a single line
         (from fortran) and writes it to a file of format Igor Text Wave """
 
+    npix = 256
     of = open(outfile,'w')
     with open(infile) as f:
         print("Opened infile {0} for reading...".format(infile))
+        #of.write('IGOR\nWAVES/N=({0},{1},{2})\t {3}\nBEGIN\n'.format(npix,npix,npix,outfile[:outfile.index('.')]))
         for i,line in enumerate(f):
             line = line.strip().split()
             if(i == 0):

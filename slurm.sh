@@ -24,7 +24,7 @@ echo ""
 
 # Executable
 mpiexec ../inverse3dft $SLURM_JOB_ID $1
-###mpiexec 3dft model_final_3726344.xyz big_t3_final_512_ 512
+###mpiexec 3dft $@
 
 echo "Finished on:"
 date '+%s'

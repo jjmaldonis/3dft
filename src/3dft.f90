@@ -87,6 +87,7 @@ program ft3d
     ! and k.r is the dot product of a k vector with every
     ! positition vector r for each atom in the model.
     ! You do this for every k vector in the grid.
+    ! Note that I scales by the number of atoms (linearly)
     write(*,*) "Calculating FT..."
     l = 0
     !$omp parallel do private(tid,i,j,k,n,dpx,dpy,dpz,kvec,dp,sk) shared(skgrid)

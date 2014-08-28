@@ -1,86 +1,28 @@
-####Paramfile setup:
-The first line should be the input modelfile
+### How this works
 
-The second line should be the number of spots to be run
+Here is the general process. You are assumed to be using the ACI cluster.
 
-Thereafter, you specify each spot with four lines:
+0. Compile the three executables in the 3D FT folder. (2 minutes)
+..* `cd 3dft; make ift -C src; make ft -C src; make stdev -C src`
 
-1) basename for the output spot files (e.g. t1_spot1_)
+1. Create a new directory for each model you are running. Generate a 512 pixel FT of your model in this directory. This allows you to visualize your structure in reciprocal space. Modify the slurm.sh file to submit the 3dft executable. This should be a simple comment/uncomment. (up to a few hours)
+..* `sbatch path/slurm.sh modelfile outbase 512`
 
-2) xmin xmax xcenter # The center positions should be specified with as much accuracy as possible, and they do not need to match the number of pixels being used in the IFT
+2. Run the Igor spot analysis [here](https://github.com/paul-voyles/Igor/blob/master/3D%20FFT%20Analysis.ipf). Follow the instructions in the header. This analyzes the high intensity diffraction spots in your FT and creates a parameter file that you will use to extract and quantify important parts of your model. (20-60 minutes)
 
-3) ymin ymax ycenter
+3. Copy the parameter file to the directory you created in (1). Run this through the IFT program by submitting a job to the cluster again. Modify the slurm.sh file to submit the ift executable. This should be a simple comment/uncomment. (~6-24 hours)
+..* `sbatch path/slurm.sh paramfile`
 
-4) zmin zmax zcenter
+4. Run the batch_convert.py program in an "int" shell. (< 30 minutes)
+..* `srun -n16 -N1 -p int --pty bash`
+..* `python path/batch_convert.py paramfile jobid 512`
 
+5. When this finishes you will have model files (I call these sub-models) for each spot identified (up to 20 spots). Now you will generate FTs for each sub-model. These are used to confirm you found the correct structure. (3-6 minutes per job)
+..* `sbatch path/spot_ft.py paramfile jobid 512`
 
-####Operation of analysis:
-The run-times discussed here are based on using 256 pixels. If you are using more, you will have to do more on aci by submitting jobs.
+6. Now you analyze the sub-models using a program in the [model_analysis repo](https://github.com/refreshx2/model_analysis). First you need to create spot_fts/ and submodels/ directories within each of your main folders and up the FTs from (5) in the spot_fts/ directory and the sub-models from (4-5) in the submodels/ directory. Then run the analysis program by submitting it to the cluster. (~1 hour)
+..* `mkdir submodels; mv *.xyz *.cif submodels/; mkdir spot_fts/; mv *_512_ft.gfx spot_fts/`
+..* `sbatch ~/model_analysis/scripts/submit_ift_cluster_analysis.sh paramfile jobid original_ft main_ft_direc VP_categories_paramfile`
+..* For example: `sbatch ~/model_analysis/scripts/submit_ift_cluster_analysis.sh ~/3dft/t1updated/paramfile_t1_update.txt 65421 ~/3dft/t1_512_ft.gfx ~/3dft/t1updated/ ~/model_analysis/scripts/categorize_parameters_updated.txt`
 
-Run the 3dft code or the 3dft part of the inverse code to generate the *entire* FT.
-
-You can probably do this on the head node of Odie, hopefully it will only take 5 minutes or less.
-
-Run: ```python lines_to_3d_wave.py ft.gfx ft.txt```
-and move the ft.txt file to windows and open in Igor.
-
-Create a new image of 'ft' and add a slider.
-
-Find a spot you want to select (the code will auto-select the mirroring spot)
-and record its ```xmin, xman, ymin, ymax, zmin, and zmax``` coordinates (in integers between 0 and npix)
-from Igor. Input these numbers into the inverse.f90 code, but make sure to add 1 to each of them because Igor starts at 0 and Fortran starts at 1.
-
-Now run the inverse code (on ACI by submitting a job) while making sure that the filtering is being used, as well as the hanning window.
-
-You should really check that the hanning window looks good before actually running the IFT part,
-so run on the Odie head node with the filtered spot and the hanning window and look at the new filtered ft.txt file in Igor.
-
-Mess with the hanning window parameters (```kspotextra = ```... should be all) until you are satisfied.
-
-Now run the full IFT on ACI.
-
-When finished, you may have to copy over the ft.gfx and mgrid.gfx to Odie (probably using rsync because WinSCP is so damn slow!)
-(but hopefully you can do the following lines on aci-service-2 since I changed them to not use numpy)
-and run: ```python lines_to_3d_wave.py ft.gfx ft.txt && python lines_to_3d_wave.py mgrid.gfx mgrid.txt```
-
-Also run stdev.f90 to run the stdev on mgrid.gfx, but you may have to change 'radius' based on the width of the fringes in Igor.
-
-  'radius' is an integer number representing *half* the fringe width (while AND black).
-
-When stdev is finished (it is pretty short if the radius is around 8 so you can do it on the head node)
-
-run: ```python lines_to_3d_wave.py stdev.gfx stdev.txt``` and copy this to Windows and into Igor. Take a look!
-
-Finally, run:
-
-```python ~/model_analysis/scripts/ift_atom_selection.py Zr50Cu35Al15_t3_final.xyz stdev.gfx```
-
-to generate a 'temp.xyz' file that contains only the atoms you want. Feel free to change the selection criteria at the end of the python file.
-
-The 'temp.xyz' file is usable, so do what you want with it. I do:
-
-```python ~/model_analysis/scripts/ift_cluster_analysis.py Zr50Cu35Al15_t3_final.xyz 3.5 temp.xyz```
-
-where the first model file is the same as the one in the previous command (and what you are using in inverse3dft.f90).
-
-This generates a model called subvpcolored.cif which can be opened with vesta and is a vpcolored model.
-
-That is it! Change as you wish.
-
-Line by line, if you have all the spots indexed that you want to run:
-
-```
-vim inverse3dft.f90 # Change k-spot
-
-make ift && qsub slurm.sh
-
-python lines_to_3d_wave.py mgrid.gfx mgrid.txt # When the ift has finished
-
-python lines_to_3d_wave.py ft.gfx ft.txt # Now copy the files to windows
-
-./stdev
-
-python lines_to_3d_wave.py stdev.gfx stdev.txt # Copy this file too
-
-python ~/model_analysis/scripts/ift_atom_selection.py Zr50Cu35Al15_t3_final.xyz stdev.gfx
-```
+7. Copy the last lines of the output file into e.g. Excel and analyze from there. I wont explain what everything means here. You will either have to read the ift_cluster_analysis.py file or talk to me.

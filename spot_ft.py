@@ -5,7 +5,7 @@ import shlex
 
 def main():
     if(len(sys.argv) != 4):
-        raise Exception("Usage: paramfile, jobid, npix for center positions of spots")
+        raise Exception("Usage: paramfile, jobid, npix")
     paramfile = sys.argv[1]
     jobid = sys.argv[2]
     npix = int(sys.argv[3])
@@ -15,13 +15,17 @@ def main():
     stop = int(params[1])
 
     for i in range(0,stop):
-        j = i*4 +2
+        j = i*7 +2
         prefix = params[j] + jobid
-        modelfile = prefix + '.xyz'
-        #print('qsub ft_slurm.sh {0} {1} {2}'.format(modelfile,prefix+'_512_',npix))
-        args = shlex.split('qsub ft_slurm.sh {0} {1} {2}'.format(modelfile,prefix+'_512_',npix))
+        modelfile = 'submodels/' + prefix + '.xyz'
+        print('qsub ft_slurm.sh {0} {1} {2}'.format(modelfile,prefix+'_512_',npix))
+        #args = shlex.split('qsub ft_slurm.sh {0} {1} {2}'.format(modelfile,prefix+'_512_',npix))
         print(' '.join(['qsub ../ft_slurm.sh',modelfile,prefix+'_512_',str(npix)]))
         p = subprocess.Popen(['qsub','../ft_slurm.sh',modelfile,prefix+'_512_',str(npix)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        #print(' '.join(['../3dft',modelfile,prefix+'_512_',str(npix)]))
+        #p = subprocess.Popen(['../3dft',modelfile,prefix+'_512_',str(npix)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
         #p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         for nextline in iter(p.stdout.readline, ""):
             sys.stdout.write(nextline)

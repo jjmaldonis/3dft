@@ -16,7 +16,8 @@ echo "Submitted on:"
 date '+%s'
 
 MPI_HOME=/share/apps/openmpi_intel_20130712/bin
-$MPI_HOME/mpiexec -n $NSLOTS inverse3dft
+###$MPI_HOME/mpiexec -n $NSLOTS inverse3dft $@
+$MPI_HOME/mpiexec -n $NSLOTS 3dft $@
 
 echo "Finished on:"
 date '+%s'
