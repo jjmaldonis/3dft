@@ -36,3 +36,11 @@ Here is the general process. You are assumed to be using the ACI cluster.
 ..* For example: `sbatch ~/model_analysis/scripts/submit_ift_cluster_analysis.sh ~/3dft/t1updated/paramfile_t1_update.txt 65421 ~/3dft/t1_512_ft.gfx ~/3dft/t1updated/ ~/model_analysis/scripts/categorize_parameters_updated.txt`
 
 7. Copy the last lines of the output file into e.g. Excel and analyze from there. I wont explain what everything means here. You will either have to read the ift_cluster_analysis.py file or talk to me.
+
+
+1. First ordered list item
+2. Another item
+..* Unordered sub-list. 
+1. Actual numbers don't matter, just that it's a number
+..1. Ordered sub-list
+4. And another item.
