@@ -25,7 +25,7 @@ Here is the general process. You are assumed to be using the ACI cluster.
 
 5. When this finishes you will have model files (I call these sub-models) for each spot identified (up to 20 spots). Now you will generate FTs for each sub-model. These are used to confirm you found the correct structure. (3-6 minutes per job)
 
-..* `sbatch path/spot_ft.py paramfile jobid 512`
+  * `sbatch path/spot_ft.py paramfile jobid 512`
 
 6. Now you analyze the sub-models using a program in the [model_analysis repo](https://github.com/refreshx2/model_analysis). First you need to create spot_fts/ and submodels/ directories within each of your main folders and up the FTs from (5) in the spot_fts/ directory and the sub-models from (4-5) in the submodels/ directory. Then run the analysis program by submitting it to the cluster. (~1 hour)
 
