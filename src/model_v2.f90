@@ -162,71 +162,64 @@ contains
 
 
     subroutine read_model(model_filename, m, istat)
-    ! Reads a model in the Kirkland .xyz file format from the file model_filename.
-    ! Puts the first-line comment in "comment", the model in m, and returns 0 in
-    ! istat if the file cant be opened or the memory allocation fails.
-    ! The subroutine composition_model has been incorporated into this
-    ! subroutine by Jason on 06/28/13.
         implicit none
         character (len=*),intent(in) :: model_filename
-        character (LEN=256) :: comment
         type(model), intent(out) :: m
         integer, intent(out) :: istat      !0 for successful open, others for failure.
-        integer :: i, j, atom_count=0, nat=0, atom_temp
+        integer :: i, j, atom_count=0, atom_temp
         integer, dimension(103) :: elements=0
         real :: comp_temp
+        character(3) :: sym
+        character(3), dimension(118) :: syms
+
+        syms = (/ "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na",  &
+        "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca", "Sc", "Ti", "V",    &
+        "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As", "Se", "Br",&
+        "Kr", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", &
+        "Cd", "In", "Sn", "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", &
+        "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu",&
+        "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", &
+        "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", &
+        "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh",&
+        "Hs", "Mt", "Ds", "Rg", "Cn", "Uut", "Fl", "Uup", "Lv", "Uus", "Uuo" /)
 
         ! Set model ID to 0.
         m%id = 0
-
-        !open(20, file=param_filename,iostat=istat, status='old')
-        !    read(20, '(a80)') comment !read comment from paramfile
-        !    read(20, '(a80)') model_filename; model_filename= adjustl(model_filename)
-        !close(20)
 
         ! Open file that contains the model information.
         open(1,file=trim(model_filename),iostat=istat,status='old')
         call check_allocation(istat, "Error in opening flie, "//model_filename)
 
-        read(1,*) ! Comment line.
-        read(1,*) ! This line contains the box size (lx, ly, lz).
-        ! Count how many atoms there are in the model.
-        do while( atom_count .ne. -1)
-            read(1,*) atom_count ! Read line.
-            nat=nat+1.0
-        enddo
-        nat=nat-1.0
-
-        rewind(1)
+        read(1,*) m%natoms
+        read(1,*) m%lx,m%ly,m%lz
 
         ! Set the number of atoms in the model m and allocate space for each
         ! coordinate.
-        m%natoms = nat
         ! Allocate the model to twice its necessary size so that we never have
         ! to reallocate ever.
-        allocate(m%xx%ind(nat*2), m%yy%ind(nat*2), m%zz%ind(nat*2), m%znum%ind(nat*2), stat=istat)
-        m%xx%nat = nat
-        m%yy%nat = nat
-        m%zz%nat = nat
-        m%znum%nat = nat
-        m%znum_r%nat = nat
+        allocate(m%xx%ind(m%natoms*2), m%yy%ind(m%natoms*2), m%zz%ind(m%natoms*2), m%znum%ind(m%natoms*2), stat=istat)
+        m%xx%nat = m%natoms
+        m%yy%nat = m%natoms
+        m%zz%nat = m%natoms
+        m%znum%nat = m%natoms
+        m%znum_r%nat = m%natoms
         call check_allocation(istat, 'Unable to allocate memory for the model being read.')
 
-        ! Read in the first 80 characters of the comment
-        read(1,'(a80)') comment
-        ! Read in the box size.
-        read(1,*) m%lx,m%ly,m%lz
         ! If the model is not a perfect cube then the rest of the calculations
         ! wont work, so we really should check that.
         if((m%lx /= m%ly) .or. (m%lx /= m%lz)) then
-            write(*,*) "The model is not a cube and will work correctly. Exiting."
+            write(*,*) "The model is not a cube and will work correctly.  Exiting."
             return
         endif
         ! Read the atomic numbers and atom positions directly into the model.
-        do i=1,nat
-            read(1,*) m%znum%ind(i),m%xx%ind(i),m%yy%ind(i),m%zz%ind(i)
+        do i=1,m%natoms
+            read(1,*) sym,m%xx%ind(i),m%yy%ind(i),m%zz%ind(i)
+            do j=1,118
+                if(sym .eq. syms(j)) m%znum%ind(i) = j
+            enddo
             ! If this atom has atomic number z, then increment the z position in
-            ! the array elements. This counts the number of each atom type we have.
+            ! the array elements. This counts the number of each atom type we
+            ! have.
             elements(m%znum%ind(i)) = elements(m%znum%ind(i)) + 1
         enddo
         close(1)
@@ -296,13 +289,157 @@ contains
 
         m%rotated = .FALSE.
 
-        !call recenter_model(0.0, 0.0, 0.0, m)
+        call recenter_model(0.0, 0.0, 0.0, m)
         call check_model(m,istat)
 
         ! Calls hutch_position and hutch_add_atom in loops.
         ! It does some allocation too.
         call model_init_hutches(m, istat)
     end subroutine read_model
+
+
+    !subroutine read_model(model_filename, m, istat)
+    !! Reads a model in the Kirkland .xyz file format from the file model_filename.
+    !! Puts the first-line comment in "comment", the model in m, and returns 0 in
+    !! istat if the file cant be opened or the memory allocation fails.
+    !! The subroutine composition_model has been incorporated into this
+    !! subroutine by Jason on 06/28/13.
+    !    implicit none
+    !    character (len=*),intent(in) :: model_filename
+    !    character (LEN=256) :: comment
+    !    type(model), intent(out) :: m
+    !    integer, intent(out) :: istat      !0 for successful open, others for failure.
+    !    integer :: i, j, atom_count=0, nat=0, atom_temp
+    !    integer, dimension(103) :: elements=0
+    !    real :: comp_temp
+
+    !    ! Set model ID to 0.
+    !    m%id = 0
+
+    !    !open(20, file=param_filename,iostat=istat, status='old')
+    !    !    read(20, '(a80)') comment !read comment from paramfile
+    !    !    read(20, '(a80)') model_filename; model_filename= adjustl(model_filename)
+    !    !close(20)
+
+    !    ! Open file that contains the model information.
+    !    open(1,file=trim(model_filename),iostat=istat,status='old')
+    !    call check_allocation(istat, "Error in opening flie, "//model_filename)
+
+    !    read(1,*) ! Comment line.
+    !    read(1,*) ! This line contains the box size (lx, ly, lz).
+    !    ! Count how many atoms there are in the model.
+    !    do while( atom_count .ne. -1)
+    !        read(1,*) atom_count ! Read line.
+    !        nat=nat+1.0
+    !    enddo
+    !    nat=nat-1.0
+
+    !    rewind(1)
+
+    !    ! Set the number of atoms in the model m and allocate space for each
+    !    ! coordinate.
+    !    m%natoms = nat
+    !    ! Allocate the model to twice its necessary size so that we never have
+    !    ! to reallocate ever.
+    !    allocate(m%xx%ind(nat*2), m%yy%ind(nat*2), m%zz%ind(nat*2), m%znum%ind(nat*2), stat=istat)
+    !    m%xx%nat = nat
+    !    m%yy%nat = nat
+    !    m%zz%nat = nat
+    !    m%znum%nat = nat
+    !    m%znum_r%nat = nat
+    !    call check_allocation(istat, 'Unable to allocate memory for the model being read.')
+
+    !    ! Read in the first 80 characters of the comment
+    !    read(1,'(a80)') comment
+    !    ! Read in the box size.
+    !    read(1,*) m%lx,m%ly,m%lz
+    !    ! If the model is not a perfect cube then the rest of the calculations
+    !    ! wont work, so we really should check that.
+    !    if((m%lx /= m%ly) .or. (m%lx /= m%lz)) then
+    !        write(*,*) "The model is not a cube and will work correctly. Exiting."
+    !        return
+    !    endif
+    !    ! Read the atomic numbers and atom positions directly into the model.
+    !    do i=1,nat
+    !        read(1,*) m%znum%ind(i),m%xx%ind(i),m%yy%ind(i),m%zz%ind(i)
+    !        ! If this atom has atomic number z, then increment the z position in
+    !        ! the array elements. This counts the number of each atom type we have.
+    !        elements(m%znum%ind(i)) = elements(m%znum%ind(i)) + 1
+    !    enddo
+    !    close(1)
+
+    !    ! Count the number of elements we have in our model.
+    !    m%nelements=0
+    !    do i=1, 103
+    !        if(elements(i) /= 0) then
+    !            m%nelements = m%nelements + 1
+    !        end if
+    !    end do
+
+    !    ! Note: nelements is usually between 1 and 5 so these loops are tiny.
+    !    ! Set m%atom_type to contain the atom types; set m%composition to
+    !    ! contain the percent composition (as a number between 0 and 1).
+    !    allocate(m%atom_type(m%nelements), m%composition(m%nelements), stat=istat)
+    !    call check_allocation(istat, 'Unable to allocate memory for m%atom_type and m%composition.')
+    !    ! Initialize the composition array to 0.0
+    !    m%composition = 0.0
+    !    ! i corresponds to the atomic number.
+    !    ! j is the next open position in composition and atom_type.
+    !    j = 1
+    !    do i=1, 103
+    !        if(elements(i) /= 0) then
+    !            ! If we reach a non-zero element in elements then there are
+    !            ! atoms with atomic number i in the model. Append this atomc
+    !            ! number to atom_types and calculate the fractional composition
+    !            ! of this element in the model, storing it in m%composition.
+    !            ! Increment j to move to the next open spot.
+    !            m%atom_type(j) = i
+    !            m%composition(j) = real(elements(i)) / real(m%natoms)
+    !            j = j + 1
+    !        end if
+    !    end do
+    !    ! Note that m%atom_type and m%composition are now linked. You can look
+    !    ! at m%composition, but you still won't know which element has this
+    !    ! fractional composition. You need to look at the same index in
+    !    ! m%atom_type in order to figure this out.
+
+    !    ! Sort atom_type by increasing atomic order. Re-order composition in the
+    !    ! same way so the indices stay in sync. (Insertion sort)
+    !    do i=1, m%nelements
+    !        do j=1, i
+    !            if( m%atom_type(i) < m%atom_type(j) ) then
+    !                atom_temp = m%atom_type(i)
+    !                comp_temp = m%composition(i)
+    !                m%atom_type(i) = m%atom_type(j)
+    !                m%composition(i) = m%composition(j)
+    !                m%atom_type(j) = atom_temp
+    !                m%composition(j) = comp_temp
+    !            end if
+    !        end do
+    !    end do
+
+    !    ! For each atom i, add a parameter znum_r(i) that corresponds to
+    !    ! m%atom_type and m%composition for fast lookup.
+    !    allocate(m%znum_r%ind(m%natoms*2), stat=istat)
+    !    call check_allocation(istat, 'Unable to allocate memory for m%znum_r.')
+    !    m%znum_r%ind = 0.0
+    !    do i=1, m%natoms
+    !        do j=1, m%nelements
+    !            if(m%znum%ind(i) .eq. m%atom_type(j)) then
+    !                m%znum_r%ind(i) = j
+    !            end if
+    !        end do
+    !    end do
+
+    !    m%rotated = .FALSE.
+
+    !    !call recenter_model(0.0, 0.0, 0.0, m)
+    !    call check_model(m,istat)
+
+    !    ! Calls hutch_position and hutch_add_atom in loops.
+    !    ! It does some allocation too.
+    !    call model_init_hutches(m, istat)
+    !end subroutine read_model
 
 
     subroutine recenter_model(xc, yc, zc, m)
