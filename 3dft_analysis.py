@@ -50,16 +50,19 @@ gauss3d
 import sys,os
 import re
 import numpy as np
+from scipy import ndimage
+from numba import jit
 import matplotlib.pyplot as  plt
+import scipy.signal as signal
 
 
 def wave3d_to_numpy(igortext_filename):
+    """ Takes in an .itx filename and loads the data into a numpy array, which is returned """
     k = 0
     i = 0
     for numlines,line in enumerate(open(igortext_filename,'rU').readlines()):
         if(numlines > 2):
             for j,x in enumerate(line.split()):
-                #print(k,i,j,x,numlines)
                 data[i][j][k] = float(x)
             if(i == dims[1]-1):
                 k += 1
@@ -71,7 +74,7 @@ def wave3d_to_numpy(igortext_filename):
             line = line.strip()
             dims = re.findall(r'([0-9]*[,)])', line)
             dims = tuple(int(x[:-1]) for x in dims)
-            data = np.zeros(dims,dtype=float)
+            data = np.zeros(dims,dtype=float) # Create the array of the correct size
     return data
 
 
@@ -90,61 +93,68 @@ class Wave:
         self.dimensions: The number of dimensions of the wave
         self.data: A numpy array containing the data
         self.scale: A tuple of 3-tuples where each 3-tuple contains the start and end scale range for the dimension's
-            scale, followed by the step value, for each i-th dimension. The number of 2-tuples is equal to the number of
+            scale, followed by the step value, for each i-th dimension. The number of 3-tuples is equal to the number of
             dimensions.
-            Default scale for each dimension is (0.,1.,...).
+            Default scale for each dimension is (0., npix, 1.)
+        self.shape: The numpy shape of the data
 
     Methods:
         get_scale:
         
     """
 
-    def __init__(self,data,scale=None):
+    def __init__(self, data, scale=None, full_scale=None):
         """ Creates an Igor wave-like object.
 
         Args:
             data: The raw wave data; any dimension is accepted
             scale: (optional) The scale for each dimension in tuple format (start_value, end_value, step) for each 
-                dimension, also in tuple format. If scale is not given, it defaults to (0.,1.,...) for each dimension.
+                dimension, also in tuple format. If scale is not given, it defaults to (0., npix, 1.) for each dimension.
 
         Returns:
             An Igor wave-like object
         """
-        if(type(data) == type([])): data = np.array(data)
+        if isinstance(data, list): data = np.array(data)
         self.dimensions = len(data.shape)
         self.data = data
         self.shape = self.data.shape
-        # default to (0.,1.,) if scale is not given
-        if(scale == None):
-            scale = [(0.,1.,1./(self.data.shape[i]-1)) for i in range(self.dimension)]
+        if scale is None: # Default to (0., npix, 1.) if scale is not given
+            scale = [(0., (self.data.shape[i]-1), 1.) for i in range(self.dimensions)]
         self.scale = scale
-        self.full_scale = [self.set_full_scale(d) for d in range(self.dimensions)]
+        self._full_scale = full_scale # This will only be used to define a custom (non-linear) scale. In this case the user must also set 'scale' to 'Custom'
 
-    def __getitem__(self,tup):
-        if(isinstance(tup,int) or isinstance(tup,'numpy.int64')):
-            return self.data[tup]
-        elif(len(tup) == 2):
-            x,y = tup
-            return self.data[x][y]
-        elif(len(tup) == 3):
-            x,y,z = tup
-            return self.data[x][y][z]
+    # If I get rid of the axis keyword and reduce the functionality then I would make this a property
+    def calculate_full_scale(self, axis=None):
+        """ Returns a 1D array of the entire scale of the data for the given dimension from start to finish by step.
+            Args:
+                dim: dimension to calculate the scale for. Value should be on of (1,2,3,...,ndim)
+        """
+        if self.scale == 'Custom': return self._full_scale
+        if axis is not None or self.dimensions == 1:
+            if self.dimensions == 1:
+                dim = 0
+            else:
+                dim = axis
+            return np.array([self.scale[dim][0] + self.scale[dim][2]*i for i in range(self.shape[dim])])
         else:
-            raise Exception("__getitem__ for Wave object has not been implemented for waves of this dimension, you must access .data manually")
-    def __setitem__(self,tup,val):
-        if(isinstance(tup,int) or isinstance(tup,'numpy.int64')):
-            self.data[tup] = val
-        elif(len(tup) == 2):
-            x,y = tup
-            self.data[x][y] = val
-        elif(len(tup) == 3):
-            x,y,z = tup
-            self.data[x][y][z] = val
-        else:
-            raise Exception("__setitem__ for Wave object has not been implemented for waves of this dimension, you must access .data manually")
-        
+            #return [np.array([self.scale[dim][0] + self.scale[dim][2]*i for i in range(self.shape[dim])]) for dim in range(self.dimensions)]
+            return np.array( [self.calculate_full_scale(dim) for dim in range(self.dimensions)] )
 
-    def get_scale(self,coord,pixelsGiven=True):
+    @property
+    def full_scale(self):
+        if self.scale != 'Custom':
+            return self.calculate_full_scale()
+        else:
+            return self._full_scale
+
+    def __getitem__(self, tup):
+        return self.data[tup]
+
+    def __setitem__(self, tup, val):
+        self.data[tup] = val
+
+    # I have no idea what the point of this is but I use it in RadiusChop
+    def get_scale(self, coord, pixelsGiven=True):
         """ Returns the scale of the coordinate in each dimension as a numpy array. """
         if(pixelsGiven):
             scale = np.array([ self.scale[i][0] + self.scale[i][2]*coord[i] for i in range(len(coord)) ])
@@ -154,89 +164,154 @@ class Wave:
             scale = None
         return scale
     
-    def set_scale(self,scale):
-        self.scale = scale
-
-    def set_full_scale(self,dim):
-        """ Returns a 1D array of the entire scale of the data for the given dimension from start to finish by step.
-            Args:
-                dim: dimension to calculate the scale for. Value should be on of (1,2,3,...,ndim)
-        """
-        return np.array([self.scale[dim][0] + self.scale[dim][2]*i for i in range(self.shape[dim])])
-
-    def x2pnt(self,dim,x):
-        scale = self.full_scale[dim]
+    def x2index(self, x, dim=0):
+        """ Converts a point in the domain to its nearest index. """
+        scale = self.calculate_full_scale()[dim]
         idx = (np.abs(scale-x)).argmin()
         return idx
+
+    def x2val(self, x, dim=0):
+        """ Converts a value in the domain to a value in the range. No interpolation is done, it just finds the nearest point. """
+        return self[self.x2index(x, dim)]
+
+    def __call__(self, x, dim=0):
+        """ Shorthand for x2val(x, dim) """
+        return self.x2val(x, dim)
+
+    def val2index(self, val, dim=0):
+        """ Converts a value in the range to a value in the domain. No interpolation is done, it just finds the nearest piont. """
+        idx = (np.abs(self.data-val)).argmin()
+        return idx
+
+    def val2x(self, val, dim=0):
+        """ Converts a value in the range to its nearest index. """
+        idx = self.val2index(val, dim)
+        return self.full_scale[idx] # This might be a bit buggy for higher dimensional arrays (ie > 1)
+
+    def save(self, outfile, ext="itx"):
+        """ writes this wave to a file of format Igor Text Wave """
+        # Need to reverse the order of the data for Igor
+        swapped = self.data
+        for i in list(reversed(range(self.dimensions)))[1:]:
+            swapped = np.swapaxes(swapped, i-1, i)
+        # Now we save the array with the changed viewpoint
+        with open(outfile, 'w') as of:
+            shape = self.shape
+            if len(shape) == 1: shape = '({0})'.format(shape[0]) # Need to remove the extra , at the end of the tuple
+            of.write('IGOR\nWAVES/N={0}\t {1}\nBEGIN\n'.format(self.shape, outfile[:outfile.index('.')]))
+            self._save_data(swapped, of)
+            #for arr in swapped:
+            #    for row in arr:
+            #        row = [str(x) for x in row]
+            #        of.write('\t'.join(row)+'\n')
+            of.write('END\n')
+            # We can even set the scale correctly
+            if self.dimensions < 4:
+                axis_names = ['x', 'y', 'z', 'd']
+                s = 'X ' + ' '.join( ['SetScale/P {0} 0,{1},"", {2};'.format(axis_names[i], self.scale[i][2], outfile[:outfile.index('.')]) for i in range(len(self.scale))] )
+                #of.write('X SetScale/P x 0,{0},"", {3}; SetScale/P y 0,{1},"", {3}; SetScale/P z 0,{2},"", {3};'.format(self.scale[0][2], self.scale[1][2], self.scale[2][2], outfile[:outfile.index('.')]))
+                of.write(s)
+
+    def _save_data(self, data, of):
+        if type(data[0]) in [int, float, np.float64, np.int64, np.int32, np.float32]:
+            of.write('\t'.join([str(x) for x in data])+'\n')
+        else:
+            for row in data:
+                self._save_data(row, of)
 
 
 # I should probably move this to be a function of the wave class
 # Then I can dynamically write it for multiple dimensions I think
-def IsoAverage3D(data,strip_width):
+#@jit
+def IsoAverage3D(wave):
     """ Calculates a 1D array of the average intensity at each radius position.
 
     Args:
-        data: An Igor wave-like object of dimension=3
-        strip_width: The number of pixels to average over
+        wave: An Igor wave-like object of dimension=3
 
     Returns:
         A 1D array of the average intensity at each radius position.
 
     """
-
-    dim = min( min( data.shape[0],data.shape[1]), data.shape[2] ) / (2*strip_width) + 1
-    iso_av = np.zeros( dim, dtype=float)
-    npix = np.zeros( dim, dtype=float)
-    end_scale = min( min( abs(data.scale[0][0]), abs(data.scale[1][0]) ), abs(data.scale[2][0]) )
-    scale = ( (0, end_scale, float(end_scale)/(npix.shape[0]-1)) ,)
-    iso_av = Wave(iso_av, scale)
-    npix = Wave(npix, scale)
-
-    for i in range(data.shape[0]):
-        print(i)
-        for j in range(data.shape[1]):
-            for k in range(data.shape[2]):
-                r = np.linalg.norm(data.get_scale(tuple([i,j,k])))
-                #print(data.scale[0][2])
-                #print(data.get_scale(tuple([i,j,k])))
-                #print(i,j,k,data.get_scale(tuple([i,j,k])),r,npix.x2pnt(0,r))
-                # If r is within the bounds of the data wave = bounds of the iso wave
-                if(r < iso_av.scale[0][1]+iso_av.scale[0][2]):
-                    #print(r,npix.x2pnt(0,r))
-                    npix[npix.x2pnt(0,r)] += 1
-                    iso_av[iso_av.x2pnt(0,r)] += data[i][j][k]
-                    #print(data[i][j][k])
-    print(iso_av.scale)
-    print(iso_av.data)
-    print(npix.data)
-    scale = iso_av.scale
-    iso_av = np.divide(iso_av.data,npix.data)
+    # Convert to spherical coordinates for fast summation
+    sph = to_spherical(wave)
+    iso_av = np.array( [np.sum(sph[:,i,:])/(sph.shape[1]+sph.shape[2]) for i in range(sph.shape[0])] ) # Not sure why I need [:,i,:] rather than [i,:,:]
+    #for x in iso_av:
+    #    print(x)
+    end_scale = min( min( abs(wave.scale[0][0]), abs(wave.scale[1][0]) ), abs(wave.scale[2][0]) )
+    scale = ( (0, end_scale, float(end_scale)/(iso_av.shape[0]-1)) ,)
     iso_av = Wave(iso_av,scale)
-    print(list(iso_av.data))
     return iso_av
 
 
+#@jit
+def condense_wave(wave, width):
+    """ Condenses a 1D wave to be shorter by averaging its neighboring elements.
+        Setting the scale doesn't work great right now. """
+    # Apply width
+    new = np.array( [sum(wave[i:i+width])/(width) for i in range(0, wave.shape[0], width)] )
+    end_scale = min( [abs(wave.scale[i][1]) for i in range(wave.dimensions)] )
+    scale = ( (0, end_scale, float(end_scale)/(new.shape[0]-1)) ,)
+    return Wave(new, scale)
 
-def RadiusChop(data,rmin,rmax):
+
+#@jit
+def to_spherical(wave):
+    scale = np.array( wave.full_scale )
+    rmax = max( abs(np.amin(scale[0,:])), abs(np.amax(scale[0,:])) ) # rmax should really take into account the diagonal distance, so this essentially cuts off the corners
+    sph_scale = Wave(np.zeros(scale.shape), scale)
+    R = np.linspace(0.0, rmax, sph_scale.shape[1])
+    THETA = np.linspace(0, np.pi, sph_scale.shape[1])
+    PHI = np.linspace(-np.pi, np.pi, sph_scale.shape[1])
+    sgrid = np.meshgrid(R, THETA, PHI)
+    #sgrid = np.array( np.meshgrid(R, THETA, PHI) )
+    cgrid = np.zeros_like(sgrid)
+    cgrid[0] = sgrid[0]*np.sin(sgrid[2])*np.cos(sgrid[1])
+    cgrid[1] = sgrid[0]*np.sin(sgrid[2])*np.sin(sgrid[1])
+    cgrid[2] = sgrid[0]*np.cos(sgrid[2])
+    npix = scale.shape[-1]-2
+    m = npix/(np.amax(scale)-np.amin(scale))
+    b = -m*np.amin(scale)
+    c2grid = m*cgrid + b
+    sph = ndimage.map_coordinates(wave.data, c2grid, cval=0.0)
+    sph = Wave(sph, scale=sph_scale)
+    #print(np.amin(wave.data))
+    #print(np.amax(wave.data))
+    #print(np.amin(c2grid))
+    #print(np.amax(c2grid))
+    #print(np.amin(sph.data))
+    #print(np.amax(sph.data))
+    return sph
+
+
+class _WithinRadius(object):
+    """ This is a helper class to make RadiusChop run much faster """
+    def __init__(self, wave, rmin, rmax):
+        self.wave = wave
+        self.full_scale = wave.full_scale
+        self.rmin2 = rmin**2
+        self.rmax2 = rmax**2
+
+    @np.vectorize
+    def __call__(self, i,j,k):
+        return self.wave[i,j,k] if self.rmin2 < self.full_scale[0][i]**2+self.full_scale[1][j]**2+self.full_scale[2][k]**2 < self.rmax2 else 0.0
+        
+
+def RadiusChop(wave, rmin, rmax):
     """ Chops the data wave by setting everything to 0 except the points radially between rmin and rmax.
     Args:
-        data: An Igor wave-like object
+        data: A Wave object
         rmin: The starting radius r
         rmax: The ending radius r
     Returns:
         A new Igor wave-like object.
     """
-    radius_chop = np.zeros( data.shape, dtype=float)
-    for i in range(data.shape[0]):
-        print(i)
-        for j in range(data.shape[1]):
-            for k in range(data.shape[2]):
-                r = np.linalg.norm(data.get_scale(tuple([i,j,k])))
-                if( (r<=rmax) and (r>=rmin) ):
-                    radius_chop[i][j][k] = data[i][j][k]
+    within_radius = _WithinRadius(wave, rmin, rmax)
+    data = np.fromfunction(lambda i,j,k: within_radius(klass,i,j,k), shape=wave.shape, dtype=np.int32)
+    return Wave(data, wave.scale)
 
 
-def smooth(x,window_len=11,window='hanning'):
+def smooth(x, window_len=11, window='hanning'):
     """smooth the data using a window with requested size.
     
     This method is based on the convolution of a scaled window with the signal.
@@ -286,33 +361,39 @@ def smooth(x,window_len=11,window='hanning'):
     return y
   
   
-
 def plot(data):
     plt.plot(data.data)
     plt.show()
-  
-  
 
-def FindSpots(data, numstdevs):
+
+def FindSpots(wave, numstdevs):
     """ """
-    scale = (-1.5,1.5,3./(data.shape[0]-1))
-    data.set_scale(tuple([scale,scale,scale]))
-    iso_av = IsoAverage3D(data,2)
-    scale = iso_av.scale
-    iso_av = smooth(iso_av.data,3)
-    iso_av = Wave(iso_av,scale)
-    #plot(iso_av)
-    min_index  = np.r_[True, iso_av.data[1:] < iso_av.data[:-1]] & np.r_[iso_av.data[:-1] < iso_av.data[1:], True]
-    print(min_index)
-    try:
-        min_index = [i for i,x in enumerate(min_index) if x][0]
-    except:
-        min_index = 0
-    print(min_index)
+    scale = (-1.5,1.5,3./(wave.shape[0]-1))
+    wave.scale = (scale,scale,scale,)
+
+    # Get first dip in iso_av for RadiusChop
+    iso_av = IsoAverage3D(wave)
+    peaks = FindPeaks(iso_av)
+    highest = max(peaks)
+    highest_index = iso_av.val2index(highest)
+    artifact_cutoff = iso_av.val2x( min(iso_av[0:highest_index]) )
+    print("Data below R = {0} is bad due to artifacts from the 3D FT, cutting that out...".format(artifact_cutoff))
+    chopped = RadiusChop(wave, artifact_cutoff, 1.5)
+    chopped.save('output.itx')
 
 
+def FindPeaks(wave):
+    maxs = signal.argrelextrema(wave.data, np.greater)[0]
+    positions = [wave.full_scale[x] for x in maxs]
+    intensities = [wave[x] for x in maxs]
+    return Wave(intensities, scale='Custom', full_scale=positions)
 
 
+def FindValleys(wave):
+    maxs = signal.argrelextrema(wave.data, np.less)[0]
+    positions = [wave.full_scale[x] for x in maxs]
+    intensities = [wave[x] for x in maxs]
+    return Wave(intensities, scale='Custom', full_scale=positions)
 
 
 
@@ -320,9 +401,13 @@ def main():
     wave = wave3d_to_numpy(sys.argv[1])
     scales = (-1.5,1.5,3./64.)
     wave = Wave(wave, (scales, scales, scales) )
-    #IsoAverage3D(wave,2)
-    FindSpots(wave,2)
-    
+    iso_av = IsoAverage3D(wave)
+    iso_av_stripped = condense_wave(iso_av, 4)
+    #print("Full scale")
+    #print([list(x) for x in iso_av.full_scale])
+    #print("Data")
+    #print(list(iso_av.data))
+    FindSpots(wave, 15)
 
 if __name__ == '__main__':
     main()
