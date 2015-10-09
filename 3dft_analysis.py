@@ -57,6 +57,7 @@ import scipy.signal as signal
 import scipy.stats as stats
 import scipy.ndimage as ndimage
 import scipy.optimize as optimize
+from collections import namedtuple
 
 
 def drange(start, stop, step):
@@ -527,68 +528,68 @@ def FindSpots(wave, numstdevs, iso_av=None, verbose=True):
 
 
 def expand_spot(wave, spot, extra):
+    assert extra % 2 == 0
     new = copy.copy(spot)
-    slicex = slice(spot['slices'][0].start-extra/2.0, spot['slices'][0].stop+extra/2.0)
-    slicey = slice(spot['slices'][1].start-extra/2.0, spot['slices'][1].stop+extra/2.0)
-    slicez = slice(spot['slices'][2].start-extra/2.0, spot['slices'][2].stop+extra/2.0)
+    slicex = slice(spot['slices'][0].start-extra/2, spot['slices'][0].stop+extra/2)
+    slicey = slice(spot['slices'][1].start-extra/2, spot['slices'][1].stop+extra/2)
+    slicez = slice(spot['slices'][2].start-extra/2, spot['slices'][2].stop+extra/2)
     new['slices'] = (slicex, slicey, slicez)
     new['data'] = wave[new['slices']]
-    new['index_center'] = (new['index_center'][0]+extra/2.0, new['index_center'][1]+extra/2.0, new['index_center'][2]+extra/2.0)
+    new['index_center'] = (new['index_center'][0]+extra/2, new['index_center'][1]+extra/2, new['index_center'][2]+extra/2)
     new['domain_center'] = (wave.full_scale[0][new['index_center'][0]], wave.full_scale[1][new['index_center'][1]], wave.full_scale[2][new['index_center'][2]]) # TODO this is ugly, I should implement something inside the Wave object to make it much prettier
     new['pixels'] = None
-    new['summed_intensity'] = np.sum(new.['data'])
+    new['summed_intensity'] = np.sum(new['data'])
     return new
 
 
 def fit_spot(wave, spot, function='gauss', hold_sigmas=False, hold_centers=False):
-    pass
+    """ There might be a bug somewhere because the best fit is always when extra=0. I would expect that to be the best but it shouldn't always be the case. """
+    best = {'spot':None, 'popt':None, 'perr':None, 'residual':1e6, 'extra':0}
+    for extra in range(0, 10, 2):
+        new = expand_spot(wave, spot, extra)
+        try:
+            tup = fit_spot_gauss(wave, new)
+        except Error as error:
+            print(error)
+            continue
+        if tup is not None:
+            popt, perr, res = tup
+            print(extra, res)
+            if res < best['residual']:
+                best['spot'] = new
+                best['popt'] = popt
+                best['perr'] = perr
+                best['residual'] = res
+                best['extra'] = extra
+        else:
+            continue
+    return best
 
 
-def fit_spot_gauss(wave, spot, extra, hold_sigmas=False, hold_centers=False):
-    # Set widths
-    xw = spot['slices'][0].stop - spot['slices'][0].start + extra
-    yw = spot['slices'][1].stop - spot['slices'][1].start + extra
-    zw = spot['slices'][2].stop - spot['slices'][2].start + extra
-    x0 = spot['index_center'][0] - spot['slices'][0].start + extra/2.0 # The spot we fit is going to be the small one so change the center indicies to reflect that
-    y0 = spot['index_center'][1] - spot['slices'][1].start + extra/2.0
-    z0 = spot['index_center'][2] - spot['slices'][2].start + extra/2.0
-
-    # Create the image to fit
-    slicex = slice(spot['slices'][0].start-extra/2.0, spot['slices'][0].stop+extra/2.0)
-    slicey = slice(spot['slices'][1].start-extra/2.0, spot['slices'][1].stop+extra/2.0)
-    slicez = slice(spot['slices'][2].start-extra/2.0, spot['slices'][2].stop+extra/2.0)
-    #image = np.copy(wave[(slicex, slicey, slicez)])
+def fit_spot_gauss(wave, spot, hold_sigmas=False, hold_centers=False):
+    # Normalize the image to have a max intensity of 1, but don't overwrite the original data
     image = np.copy(spot['data'])
-    #xw = image.shape[0]
-    #yw = image.shape[1]
-    #zw = image.shape[2]
-    #x0 = xw/2.0
-    #y0 = yw/2.0
-    #z0 = zw/2.0
-
-    # Normalize the image to have a max intensity of 1
     image /= spot['max_intensity']
 
     # Do the fit
-    #mesh = np.array( [[[(i,j,k) for k in range(image.shape[2])] for j in range(image.shape[1])] for i in range(image.shape[0])] )
-    #mesh = np.meshgrid(range(image.shape[0]), range(image.shape[1]), range(image.shape[2]))
-    x = np.array( [i for i in range(image.shape[0])] )
-    y = np.array( [j for j in range(image.shape[1])] )
-    z = np.array( [k for k in range(image.shape[2])] )
-    mesh = np.array(np.meshgrid(x,y,z)).T
     if np.sum(image.size) > 9:
-        params = [xw/2.0, yw/2.0, zw/2.0, 0.1, 0.1, 0.1, x0+extra/2.0, y0+extra/2.0, z0+extra/2.0]
+        # Set widths
+        xw, yw, zw = image.shape
+        # The spot we fit is going to be the small one so change the center indicies to reflect that
+        x0, y0, z0 = [spot['index_center'][i] - spot['slices'][i].start for i in range(len(spot['slices']))]
+
+        # Set initial guesses for parameters (in order of parameters specified in the fitting function)
+        params = [xw/2.0, yw/2.0, zw/2.0, 0.1, 0.1, 0.1, x0/2.0, y0/2.0, z0/2.0]
+        # Setup the data in a format that can be read and vectorized properly for curve_fit
         data4D = np.array( [ [i,j,k,image[i,j,k]] for i in range(image.shape[0]) for j in range(image.shape[1]) for k in range(image.shape[2]) ] )
         try:
-            #popt, pcov = optimize.curve_fit(Gaussian3D, mesh, image.flatten(), p0=params)
             popt, pcov = optimize.curve_fit(VectorizedGaussian3D, data4D[:,:3], data4D[:,3], p0=params, maxfev=4000)
             perr = np.sqrt(np.diag(pcov))
             res = residuals(image, Gaussian3D, popt)
             return popt, perr, res
         except RuntimeError:
-            return None
-    else:
-        return None
+            pass
+    return None
 
 
 def residuals(data, func, parameters):
@@ -622,17 +623,47 @@ def FindValleys(wave):
 
 
 
+def create_output(modelfilename, spots, filename, num_spots=None):
+    if num_spots is None: num_spots = len(spots)
+    of = open(filename, 'w')
+    of.write('{0}\n'.format(modelfilename))
+    of.write('{0}\n'.format(num_spots))
+    for i,spot in enumerate(spots):
+        of.write('spot{0}_\n'.format(i))
+        of.write('{0} {1} {2} {3}\n'.format(spot['fit'].x0,  spot['fit'].y0,  spot['fit'].z0,  spot['|g|']))
+        of.write('{0} {1} {2} {3}\n'.format(spot['fit'].sx,  spot['fit'].sy,  spot['fit'].sz,  spot['|g|']))
+        of.write('{0} {1} {2} {3}\n'.format(spot['fit'].cxy, spot['fit'].cxz, spot['fit'].cyz, spot['|g|']))
+    of.close()
+
+
+def load_data(infile):
+    """ read a file into a numpy array. these formats are supported: Igor wave (.itx); numpy array (.npy)"""
+    filename, extension = os.path.splitext(infile)
+    if extension == '.itx':
+        return wave3d_to_numpy(infile)
+    elif extension == '.npy':
+        return np.load(infile)
+    else:
+        raise Exception("Cannot load data, filetype not supported.")
+
+
+
 def main():
+    modelfile = sys.argv[1]
     print("Loading data...")
-    wave = np.load(sys.argv[1]) #wave3d_to_numpy(sys.argv[1])
-    print("Loaded data!")
+    wave = load_data(sys.argv[2])
     scales = (-1.5,1.5,3./64.)
     wave = Wave(wave, (scales, scales, scales) )
+    print("Loaded data!")
+
     print("Calculating annular average...")
     iso_av = IsoAverage3D(wave)
     iso_av.save('iso_av.itx')
     iso_av_stripped = condense_wave(iso_av, 4)
-    spots = FindSpots(wave, 15, iso_av=iso_av, verbose=True)
+
+    spots = FindSpots(wave, 10, iso_av=iso_av, verbose=True)
+
+    Fit = namedtuple('Fit', ['x0', 'y0', 'z0', 'sx', 'sy', 'sz', 'cxy', 'cxz', 'cyz', 'residual', 'perr'])
     for i,spot in enumerate(spots):
         Wave(spot['data']).save('spot{0}.npy'.format(i))
         Wave(spot['data']).save('spot{0}.itx'.format(i))
@@ -642,84 +673,21 @@ def main():
         print("  |g| = {0}".format(spot['|g|']))
         print("  volume of spot = {0}".format(spot['volume']))
         print("  shape of spot = {0}".format(spot['data'].shape))
-        tup = fit_spot_gauss(wave, spot, 0)
-        if tup is not None:
-            popt, perr, res = tup
-            print(popt)
-            print(res)
+        best_fit = fit_spot(wave, spot)
+        popt = best_file['popt']
+        fit = Fit(*popt, residual=best_fit['residual'], perr=best_fit['perr'])
+        spot['fit'] = fit
+        if best_fit is not None:
+            print(best_fit['extra'])
+            print(best_fit['popt'])
+            print(best_fit['perr'])
+            print(best_fit['residual'])
         else:
             print("  Fit failed :(")
         if i > 20: break
 
-def temp():
-    #image = np.array(
-    #    [[[   808.253132,  1636.496666,  2008.889868,  1684.508204,   858.571658],
-    #      [  1560.998656,  3180.467977,  3898.393555,  3265.851423,  1668.202101],
-    #      [  1851.417037,  3788.65436 ,  4636.830432,  3876.664524,  1976.270718],
-    #      [  1508.377458,  3094.67948 ,  3772.754867,  3139.629217,  1592.125781],
-    #      [   743.542801,  1524.513014,  1835.57251 ,  1507.316671,   754.397582]],
+    create_output(modelfile, spots, 'paramfile.txt')
 
-    #     [[  1556.970411,  3176.379384,  3896.687719,  3269.138593,  1678.842389],
-    #      [  3112.498273,  6307.63081 ,  7693.846446,  6419.256303,  3269.242803],
-    #      [  3766.547486,  7603.692286,  9245.755   ,  7688.148653,  3889.344826],
-    #      [  3120.58381 ,  6272.826376,  7598.042806,  6291.21324 ,  3157.672384],
-    #      [  1570.056244,  3127.843896,  3754.058094,  3078.697348,  1524.171968]],
-
-    #     [[  1857.880749,  3778.5986  ,  4622.656675,  3867.241927,  1971.090929],
-    #      [  3787.868527,  7614.670502,  9242.778228,  7673.335927,  3869.19815 ],
-    #      [  4630.43243 ,  9244.145167, 11177.345256,  9244.145167,  4630.43243 ],
-    #      [  3869.19815 ,  7673.335927,  9242.778228,  7614.670502,  3787.868527],
-    #      [  1971.090929,  3867.241927,  4622.656675,  3778.5986  ,  1857.880749]],
-
-    #     [[  1524.171968,  3078.697348,  3754.058094,  3127.843896,  1570.056244],
-    #      [  3157.672384,  6291.21324 ,  7598.042806,  6272.826376,  3120.58381 ],
-    #      [  3889.344826,  7688.148653,  9245.755   ,  7603.692286,  3766.547486],
-    #      [  3269.242803,  6419.256303,  7693.846446,  6307.63081 ,  3112.498273],
-    #      [  1678.842389,  3269.138593,  3896.687719,  3176.379384,  1556.970411]],
-
-    #     [[   754.397582,  1507.316671,  1835.57251 ,  1524.513014,   743.542801],
-    #      [  1592.125781,  3139.629217,  3772.754867,  3094.67948 ,  1508.377458],
-    #      [  1976.270718,  3876.664524,  4636.830432,  3788.65436 ,  1851.417037],
-    #      [  1668.202101,  3265.851423,  3898.393555,  3180.467977,  1560.998656],
-    #      [   858.571658,  1684.508204,  2008.889868,  1636.496666,   808.253132]]]
-    #)
-    image = np.load('spot7.npy')
-    print(np.amax(image))
-    image /= np.amax(image)
-    print(image)
-    print(image.shape)
-
-    xw = 5 # width of the image
-    yw = 5
-    zw = 5
-    x0 = 2 # center of the image
-    y0 = 2
-    z0 = 2
-
-    xw = image.shape[0]
-    yw = image.shape[1]
-    zw = image.shape[2]
-    x0 = xw/2.0
-    y0 = yw/2.0
-    z0 = zw/2.0
-
-    x = np.array( [i for i in range(image.shape[0])] )
-    y = np.array( [j for j in range(image.shape[1])] )
-    z = np.array( [k for k in range(image.shape[2])] )
-    mesh = np.array(np.meshgrid(x,y,z)).T
-
-    extra = 0
-    params = [xw/2.0, yw/2.0, zw/2.0, 0.1, 0.1, 0.1, x0+extra/2.0, y0+extra/2.0, z0+extra/2.0]
-    data4D = np.array( [ [i,j,k,image[i,j,k]] for i in range(image.shape[0]) for j in range(image.shape[1]) for k in range(image.shape[2]) ] )
-    #print(data4D)
-    print(params)
-    #popt, pcov = optimize.curve_fit(Gaussian3D, mesh, image.flatten(), p0=params)
-    popt, pcov = optimize.curve_fit(VectorizedGaussian3D, data4D[:,:3], data4D[:,3], p0=params, maxfev=4000)
-    perr = np.sqrt(np.diag(pcov))
-    res = residuals(image, Gaussian3D, popt)
-
-    print(popt)
-    print(res)
 
 if __name__ == '__main__':
     main()
