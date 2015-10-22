@@ -292,71 +292,71 @@ program ft3d
         enddo
     enddo
 
-    !write(*,*) "Writing ft output..."
-    !open(unit=52,file=trim(outbase)//'ft'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    !write(52,*) npix, npix, npix
-    !do k=1, nkz
-    !    do i=1, nkx
-    !        do j=1, nky
-    !            write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
-    !        enddo
-    !    enddo
-    !    write(52,*)
-    !enddo
-    !close(52)
+    write(*,*) "Writing ft output..."
+    open(unit=52,file=trim(outbase)//'ft'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) npix, npix, npix
+    do k=1, nkz
+        do i=1, nkx
+            do j=1, nky
+                write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
 
     !stop
 
-    !write(*,*) "Writing ft+kspotextra for a single spot..."
-    !open(unit=52,file=trim(outbase)//'ft_onespot1'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    !write(52,*) kxradius*2, kyradius*2, kzradius*2
+    write(*,*) "Writing ft+kspotextra for a single spot..."
+    open(unit=52,file=trim(outbase)//'ft_onespot1'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) kxradius*2, kyradius*2, kzradius*2
+    do k=kzvolmin, kzvolmax
+        do i=kxvolmin, kxvolmax
+            do j=kyvolmin, kyvolmax
+                write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
+    open(unit=52,file=trim(outbase)//'ft_onespot2'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) kxradius*2, kyradius*2, kzradius*2
     !do k=kzvolmin, kzvolmax
     !    do i=kxvolmin, kxvolmax
     !        do j=kyvolmin, kyvolmax
-    !            write(52,"(1f14.6)",advance='no') ikgrid(i,j,k)
-    !        enddo
-    !    enddo
-    !    write(52,*)
-    !enddo
-    !close(52)
-    !open(unit=52,file=trim(outbase)//'ft_onespot2'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    !write(52,*) kxradius*2, kyradius*2, kzradius*2
-    !! NOTE: This prints in opposite order, so the spots should LOOK the exact same
-    !do k=kzvolmin, kzvolmax
-    !    do i=kxvolmin, kxvolmax
-    !        do j=kyvolmin, kyvolmax
-    !!do k=kzvolmax, kzvolmin, -1
-    !!    do i=kxvolmax, kxvolmin, -1
-    !!        do j=kyvolmax, kyvolmin, -1
-    !            write(52,"(1f14.6)",advance='no') ikgrid(nkx-i,nky-j,nkz-k)
-    !        enddo
-    !    enddo
-    !    write(52,*)
-    !enddo
-    !close(52)
-    !open(unit=52,file='amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    !write(52,*) npix, npix, npix
-    !do k=1, nkx
-    !    do i=1, nkx
-    !        do j=1, nky
-    !            write(52,"(1f14.6)",advance='no') real(skgrid(i,j,k))
-    !        enddo
-    !    enddo
-    !    write(52,*)
-    !enddo
-    !close(52)
-    !open(unit=52,file='phase'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    !write(52,*) npix, npix, npix
-    !do k=1, nkz
-    !    do i=1, nkx
-    !        do j=1, nky
-    !            !write(52,"(1f50.6)",advance='no') aimag(skgrid(i,j,k))
-    !            write(52,"(1f14.6)",advance='no') atan2(real(skgrid(i,j,k)),aimag(skgrid(i,j,k)))
-    !        enddo
-    !    enddo
-    !    write(52,*)
-    !enddo
-    !close(52)
+    ! NOTE: This prints in opposite order, so the spots should LOOK the exact same
+    do k=kzvolmax, kzvolmin, -1
+        do i=kxvolmax, kxvolmin, -1
+            do j=kyvolmax, kyvolmin, -1
+                write(52,"(1f14.6)",advance='no') ikgrid(nkx-i,nky-j,nkz-k)
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
+    open(unit=52,file='amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) npix, npix, npix
+    do k=1, nkx
+        do i=1, nkx
+            do j=1, nky
+                write(52,"(1f14.6)",advance='no') real(skgrid(i,j,k))
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
+    open(unit=52,file='phase'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) npix, npix, npix
+    do k=1, nkz
+        do i=1, nkx
+            do j=1, nky
+                !write(52,"(1f50.6)",advance='no') aimag(skgrid(i,j,k))
+                write(52,"(1f14.6)",advance='no') atan2(real(skgrid(i,j,k)),aimag(skgrid(i,j,k)))
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
 
     write(*,*) "Calculating IFT..."
     l = 0
@@ -413,29 +413,29 @@ program ft3d
         write(52,*)
     enddo
     close(52)
-    !open(unit=52,file='ift_amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    !write(52,*) npix, npix, npix
-    !do k=1, nkx
-    !    do i=1, nkx
-    !        do j=1, nky
-    !            write(52,"(1f14.6)",advance='no') real(mgrid(i,j,k))
-    !        enddo
-    !    enddo
-    !    write(52,*)
-    !enddo
-    !close(52)
-    !open(unit=52,file='ift_phase'//trim(jobID)//'.gfx',form='formatted',status='unknown')
-    !write(52,*) npix, npix, npix
-    !do k=1, nkz
-    !    do i=1, nkx
-    !        do j=1, nky
-    !            !write(52,"(1f50.6)",advance='no') aimag(mgrid(i,j,k))
-    !            write(52,"(1f14.6)",advance='no') atan2(real(mgrid(i,j,k)),aimag(mgrid(i,j,k)))
-    !        enddo
-    !    enddo
-    !    write(52,*)
-    !enddo
-    !close(52)
+    open(unit=52,file='ift_amp'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) npix, npix, npix
+    do k=1, nkx
+        do i=1, nkx
+            do j=1, nky
+                write(52,"(1f14.6)",advance='no') real(mgrid(i,j,k))
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
+    open(unit=52,file='ift_phase'//trim(jobID)//'.gfx',form='formatted',status='unknown')
+    write(52,*) npix, npix, npix
+    do k=1, nkz
+        do i=1, nkx
+            do j=1, nky
+                !write(52,"(1f50.6)",advance='no') aimag(mgrid(i,j,k))
+                write(52,"(1f14.6)",advance='no') atan2(real(mgrid(i,j,k)),aimag(mgrid(i,j,k)))
+            enddo
+        enddo
+        write(52,*)
+    enddo
+    close(52)
     enddo
     close(50)
     

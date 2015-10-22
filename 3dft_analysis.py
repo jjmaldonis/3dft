@@ -1,51 +1,4 @@
-"""
-
-This is the python version of the Igor code that runs the spot finding and fitting on the results of 3dft.
-
-Necessary functions to write:
-IsoAverage3D
-RadiusChop
-makeSphere
-#makeSphereColorWave
-#VolumeStdDev
-#StdDev3d
-#VolumeSum
-
-FindSpots
-gauss_fit_particle
-gauss_fit_particles
-#regenerateSpotParameters
-create_output_wave
-create_output_particle
-fitSpotTo3DGauss
-SaveParamfile
-#create_windowed_spots
-#create_unwindowed_spots
-MDsort
-FindFirstMin
-gauss3d
-#ShowXYZLineProfiles
-#ShowXYZLineProfile
-#ImageLineProfile3D
-#try_automagic_spot_fix
-AppendGvecsToVk
-linearInterp
-cut_ft_smaller_for_isosurface
-window_edge_checking
-
-
-Essentialfunctions:
-IsoAverage3D
-RadiusChop
-gauss_fit_particle
-gauss_fit_particles
-create_output_wave
-create_output_particle
-fitSpotTo3DGauss
-SaveParamfile
-gauss3d
-
-"""
+__author__ = "Jason J. Maldonis"
 
 import sys, os, copy
 import re
@@ -58,6 +11,7 @@ import scipy.stats as stats
 import scipy.ndimage as ndimage
 import scipy.optimize as optimize
 from collections import namedtuple
+import numpy.ma as ma
 
 
 def drange(start, stop, step):
@@ -84,7 +38,6 @@ def wave3d_to_numpy(igortext_filename):
                 if(k == dims[0]):
                     break
             i += 1
-            print(i,j,k)
         elif(numlines == 1):
             line = line.strip()
             dims = re.findall(r'([0-9]*[,)])', line)
@@ -93,33 +46,85 @@ def wave3d_to_numpy(igortext_filename):
     return data
 
 
+def gfx_to_numpy(infile):
+    with open(infile) as f:
+        for i,line in enumerate(f):
+            if i != 0:
+                data[i-1,:,:] = np.fromstring(line, count=npixy*npixz, sep=' ').reshape(npixy, npixz)
+            else:
+                line = line.strip().split()
+                npixx, npixy, npixz = tuple([int(x) for x in line])
+                print("While loading gfx:  Number of pixels in each direction: {0} {1} {2}".format(npixx, npixy, npixz))
+                data = np.zeros((npixx, npixy, npixz), dtype=np.float)
+    return data
+
 
 class Scale1D(object):
-    def __init__(self, start, stop=None, step=None, func=None, custom=False):
-        self.func = func
-        if func is None:
-            self.func = lambda x: x
+    def __init__(self, start=None, stop=None, step=None, size=None, func=None, custom=False):
+        self._size = size # number of pixels along this axis of the data
         if custom is False:
-            self.start = custom[0]
-            self.end = custom[-1]
-            self.step = None
+            if self._size is None:
+                self._size = round((stop-start)/step)
+            if start is None:
+                start = size*step + stop
+            if stop is None:
+                stop = start - size*step
+            if step is None:
+                step = (stop-start)/float(size)
+            try:
+                assert self._size == round((stop-start)/step)
+            except AssertionError:
+                print(self._size, start, stop, step)
+                assert self._size == round((stop-start)/step)
+
+        self._func = func
+        if self._func is None:
+            self._func = lambda x: x
+
+        if custom is False:
+            self._start = start
+            self._stop = stop
+            self._step = step
+            self._custom = False
         else:
-            self.start = self.__start = start
-            self.stop = self.__stop = stop
-            self.step = self.__step = step
+            self._start = custom[0]
+            self._stop = custom[-1]
+            self._step = None
+            self._custom = True
 
     @property
     def values(self):
-        if custom is not False:
-            return custom
+        if self._custom is not False:
+            return self._custom
         else:
-            return np.array([self.func(x) for x in drange(self.start, self.stop, self.step)])
+            a = np.zeros(self._size)
+            for i,x in enumerate(drange(self._start, self._stop, self._step)):
+                a[i] = self._func(x)
+            return a
+
+    @property
+    def start(self):
+        return self._start
+
+    @property
+    def stop(self):
+        return self._stop
+
+    @property
+    def step(self):
+        return self._step
+
+    @property
+    def func(self):
+        return self._func
 
 
 class Scale(object):
     """ An Igor scale-like object.
 
         parameters:
+            
+            shape:   The shape of the wave's data (numpy format). (Required)
 
             tup:     For 1D data: (start, stop, step, func=None)
                      For multidimensional data:
@@ -127,65 +132,110 @@ class Scale(object):
                      The optional 'func' inside each scale tuple will be evaluated on each intermediate
                      value in range(start, stop, step) to allow for a non-linear scale. The default
                      None will simply evaulate f(x)=x on each of these range values.
-                     Default is None, but this should always be overwritten unless 'custom' is provided.
+                     Default value for 'tup' is None, but this should always be overwritten unless 'custom' is provided.
 
             custom:  If your data does not have a functionally evaluatable domain, you can define a
                      custom scale object that defines each axis in full.
-                     For example, custom=( [0, 2, 4, 8, 16], [0, 3, 9, 27] ) defines a custom log
+                     For example, custom=( [0, 5, 6, 18, 57], [-50, 50, -50, 50] ) defines a custom
                      scale for a dataset of shape 5x4.
+                     Default value is False.
 
-            Note:    You must define one and only one of 'tup' or 'custom'.
-        
+            Notes:   You must define one and only one of 'tup' or 'custom'.
+                     At least two of start, stop, step must be defined for each scale tuple.
+
         usage:
         
             self.start:  If the data is 1D, this is the value of 'start' in the tuple.
                          Otherwise this is a tuple of the start values given for each dimension.
             self.stop:   Similar to self.start
             self.step:   Similar to self.start
+            self.func:   Similar to self.start
             self.scale:  Returns the fully enumerated scale in each dimension.
             self[...]:   You can get the domain of your data easily by simply passing in the indices
                          at which you want the domain.
     """
-    def __init__(self, tup=None, custom=False):
-        if custom is False and tup is None:
-            raise Exception("You must define a scale somehow!")
-        elif custom is not False and tup is not None:
-            raise Exception("You cannot define both a custom scale and a functionally-evaluatable one.")
-        self.custom = custom # False or the custom full scale you want to return
 
-        if tup is not None and isinstance(tup[0], tuple): # Multidimensional
-            self._scale = tuple([Scale1D(*scale)] for scale in tup)
-            self.dimensions = len(self._scale)
-            self.__meshgrid = np.meshgrid(*self.scale)
-            self.start = tuple( [scale.start for scale in self._scale] )
-            self.stop = tuple( [scale.stop for scale in self._scale] )
-            self.step = tuple( [scale.step for scale in self._scale] )
+    def __init__(self, shape, tups=None, custom=False):
+        if custom is False and tups is None:
+            raise Exception("You must define a scale somehow!")
+        elif custom is not False and tups is not None:
+            raise Exception("You cannot define both a custom scale and a functionally-evaluatable one.")
+
+        self._custom = custom # False or the custom full scale the user wants to return
+        self._shape = shape # Shape of the wave data
+
+        self._scale = []
+        if custom is False:
+            for i,tup in enumerate(tups):
+                if not isinstance(tup, Scale1D):
+                    start = tup[0]
+                    stop = tup[1]
+                    step = tup[2]
+                    if len(tups) < 4:
+                        func = None
+                    else:
+                        func = tup[3]
+                    self._scale.append(Scale1D(start=start, stop=stop, step=step, func=func, size=shape[i]))
+                else:
+                    self._scale.append(tup)
+        else:
+            for i,tup in enumerate(custom):
+                if not isinstance(tup, Scale1D):
+                    self._scale.append(Scale1D(size=shape[i], custom=custom[i])) # TODO Somehow allow for func to be passed in? Or not because it's custom anyways?
+                else:
+                    self._scale.append(tup)
+
+        if len(self._scale) > 1: # Multidimensional
+            self._scale = tuple(self._scale)
+            self.ndim = len(self._scale)
+            self._meshgrid = np.meshgrid(*self.scale)
+            self._start = tuple( scale.start for scale in self._scale )
+            self._stop = tuple( scale.stop for scale in self._scale )
+            self._step = tuple( scale.step for scale in self._scale )
+            self._func = tuple( scale.func for scale in self._scale )
         else: # 1D
-            self._scale = Scale1D(*tup)
-            self.dimensions = 1
-            self.__meshgrid = self._scale
-            self.start = self._scale.start
-            self.stop = self._scale.stop
-            self.step = self._scale.step
+            self._scale = self._scale[0]
+            self.ndim = 1
+            self._meshgrid = self._scale
+            self._start = self._scale.start
+            self._stop = self._scale.stop
+            self._step = self._scale.step
+            self._func = self._scale.func
 
     @property
     def scale(self):
-        if self.custom != False: return self.custom
-        if axis is not None or self.dimensions == 1:
+        """ This needs to be a property because if the user tries to change it, self._meshgrid
+            will get screwed up. """
+        if self.ndim == 1:
             return self._scale.values
         else:
             return np.array( [scale.values for scale in self._scale] )
 
     def __getitem__(self, coord):
-        return self.__meshgrid[coord]
+        return self._meshgrid[coord]
+
+    @property
+    def start(self):
+        return self._start
+
+    @property
+    def stop(self):
+        return self._stop
+
+    @property
+    def step(self):
+        return self._step
+
+    @property
+    def func(self):
+        return self._func
 
 
-
-class Wave:
+class Wave(object):
     """ An Igor wave-like object.
 
     Attributes:
-        self.dimensions: The number of dimensions of the wave
+        self.ndim: The number of dimensions of the wave
         self.data: A numpy array containing the data
         self.scale: A tuple of 3-tuples where each 3-tuple contains the start and end scale range for the dimension's
             scale, followed by the step value, for each i-th dimension. The number of 3-tuples is equal to the number of
@@ -198,49 +248,75 @@ class Wave:
         
     """
 
-    def __init__(self, data, scale=None, full_scale=None):
+    def __init__(self, data, scale=None, custom_scale=None):
         """ Creates an Igor wave-like object.
 
         Args:
-            data: The raw wave data; any dimension is accepted
-            scale: (optional) The scale for each dimension in tuple format (start_value, end_value, step) for each 
-                dimension, also in tuple format. If scale is not given, it defaults to (0., npix, 1.) for each dimension.
+            data:          (Required) The raw wave data; any dimension is accepted
+
+            scale:         (Optional) The scale for each dimension in tuple format (start, stop, step, func) for each 
+                           dimension, also in tuple format. If scale is not given, it defaults to (0., npix, 1.) for each dimension.
+                           See the inputs for the 'Scale' object for more information.
+
+            custom_scale:  (Optional) A tuple of lists, one for each dimension. This should only be used when the data has a very
+                           abnormal domain.
 
         Returns:
+
             An Igor wave-like object
         """
-        if isinstance(data, list): data = np.array(data)
-        self.dimensions = len(data.shape)
-        self.data = data
-        self.shape = self.data.shape
-        if scale is None: # Default to (0., npix, 1.) if scale is not given
-            scale = [(0., (self.data.shape[i]-1), 1.) for i in range(self.dimensions)]
-        self.scale = scale
-        self._full_scale = full_scale # This will only be used to define a custom (non-linear) scale. In this case the user must also set 'scale' to 'Custom'
 
-    # If I get rid of the axis keyword and reduce the functionality then I would make this a property
-    def calculate_full_scale(self, axis=None):
+        if isinstance(data, list):
+            data = np.array(data)
+
+        self.ndim = len(data.shape)
+        self.data = data
+        if scale is None: # Default to (0., npix, 1.) if scale is not given
+            if custom_scale is None:
+                self._scale = Scale(self.shape, tuple( (0., self.data.shape[i], 1.) for i in range(self.ndim) ))
+            else:
+                self._scale = Scale(self.shape, custom=custom_scale)
+        elif not isinstance(scale, Scale): # a tuple of tuples was passed in, so pass that to Scale
+            self._scale = Scale(self.shape, scale)
+        else: # 'scale' is a Scale object already
+            self._scale = scale
+        assert isinstance(self._scale, Scale)
+
+        if custom_scale is None:
+            self._custom_scale = False
+            self._full_scale = self.recalculate_full_scale()
+        else:
+            self._custom_scale = True
+            self._full_scale = custom_scale # This will only be used to define a custom (non-linear) scale. In this case the user must also set 'scale' to 'Custom'
+
+
+    @property
+    def shape(self):
+        return self.data.shape
+
+    def recalculate_full_scale(self, axis=None):
         """ Returns a 1D array of the entire scale of the data for the given dimension from start to finish by step.
             Args:
                 dim: dimension to calculate the scale for. Value should be on of (1,2,3,...,ndim)
         """
-        if self.scale == 'Custom': return self._full_scale
-        if axis is not None or self.dimensions == 1:
-            if self.dimensions == 1:
-                dim = 0
+        if self._custom_scale: return self._full_scale
+        if axis is not None or self.ndim == 1:
+            if self.ndim == 1:
+                return self._scale.scale
             else:
-                dim = axis
-            return np.array([self.scale[dim][0] + self.scale[dim][2]*i for i in range(self.shape[dim])])
+                return self._scale[axis]
         else:
-            #return [np.array([self.scale[dim][0] + self.scale[dim][2]*i for i in range(self.shape[dim])]) for dim in range(self.dimensions)]
-            return np.array( [self.calculate_full_scale(dim) for dim in range(self.dimensions)] )
+            return self._scale.scale
 
     @property
+    def scale(self):
+        assert isinstance(self._scale, Scale)
+        return self._scale
+    
+    @property
     def full_scale(self):
-        if self.scale != 'Custom':
-            return self.calculate_full_scale()
-        else:
-            return self._full_scale
+        """ If the user modifies the Scale object, then things will not work correctly so this needs to be a property. """
+        return self._full_scale
 
     def __getitem__(self, tup):
         return self.data[tup]
@@ -250,8 +326,8 @@ class Wave:
 
     def x2index(self, x, dim=0):
         """ Converts a point in the domain to its nearest index. """
-        scale = self.calculate_full_scale()[dim]
-        idx = (np.abs(scale-x)).argmin()
+        scale = self._full_scale()[dim]
+        idx = np.nanargmin(np.abs(scale-x))
         return idx
 
     def x2val(self, x, dim=0):
@@ -264,8 +340,8 @@ class Wave:
 
     def val2index(self, val):
         """ Converts a value in the range to a value in the domain. No interpolation is done, it just finds the nearest piont. """
-        idx = (np.abs(self.data-val)).argmin()
-        if self.dimensions > 1: idx = np.unravel_index(idx, self.data.shape)
+        idx = np.nanargmin(np.abs(self.data-val))
+        if self.ndim > 1: idx = np.unravel_index(idx, self.data.shape)
         return idx
 
     def val2x(self, val):
@@ -282,34 +358,42 @@ class Wave:
             np.save(outfile, self.data)
         else:
             raise Exception("Cannot save array, filetype not supported. Provide a supported file extension.")
-    
+
     def _save_itx(self, outfile):
         """ Save as Igor wave """
         # Need to reverse the order of the data for Igor
         swapped = self.data
-        for i in list(reversed(range(self.dimensions)))[1:]:
+        for i in list(reversed(range(self.ndim)))[1:]:
             swapped = np.swapaxes(swapped, i-1, i)
         # Now we save the array with the changed viewpoint
         with open(outfile, 'w') as of:
             shape = self.shape
             if len(shape) == 1:
-                shape = '({0})'.format(shape[0]) # Need to remove the extra , at the end of the tuple
+                shape = '({0})'.format(shape[0]) # Remove the extra , at the end of the tuple
             of.write('IGOR\nWAVES/N={0}\t {1}\nBEGIN\n'.format(shape, outfile[:outfile.index('.')]))
             self._save_data(swapped, of)
             of.write('END\n')
             # We can even set the scale correctly
-            if self.dimensions < 4:
-                axis_names = ['x', 'y', 'z', 'd']
-                s = 'X ' + ' '.join( ['SetScale/P {0} 0,{1},"", {2};'.format(axis_names[i], self.scale[i][2], outfile[:outfile.index('.')]) for i in range(len(self.scale))] )
+            if self.ndim < 4:
+                if self.ndim == 1:
+                    s = 'X SetScale/P x {0},{1},"", {2};'.format(self.scale.start, self.scale.step, outfile[:outfile.index('.')])
+                else:
+                    axis_names = ['x', 'y', 'z', 'd']
+                    s = 'X ' + ' '.join( ['SetScale/P {0} {1},{2},"", {3};'.format(axis_names[i], self.scale.start[i], self.scale.step[i], outfile[:outfile.index('.')]) for i in range(self.scale.ndim)] )
                 of.write(s)
+            else:
+                raise Exception("Cannot save wave with dimensions greater than 4 in this format.")
 
     def _save_data(self, data, of):
         """ Goes through the data and saves it regardless of dimension. This is a recursive function so it needs to be its own function. """
         if type(data[0]) in [int, float, np.float64, np.int64, np.int32, np.float32]:
             of.write('\t'.join([str(x) for x in data])+'\n')
         else:
-            for row in data:
+            for i,row in enumerate(data):
                 self._save_data(row, of)
+
+    def __repr__(self):
+        return "Wave Object:\n{0}\n{1}".format(self.data, self.scale)
 
 
 # I should probably move this to be a function of the wave class
@@ -327,15 +411,90 @@ def IsoAverage3D(wave):
     """
     # Convert to spherical coordinates for fast summation
     print("  Transforming to spherical coordinates...")
+    print(wave)
+    print(wave.full_scale)
+    print(to_spherical)
     sph = to_spherical(wave)
+    sph.save('spherical.itx')
     print("  Doing radial summation for IsoAv...")
     iso_av = np.array( [np.sum(sph[:,i,:])/(sph.shape[1]+sph.shape[2]) for i in range(sph.shape[0])] ) # Not sure why I need [:,i,:] rather than [i,:,:]
-    end_scale = min( min( abs(wave.scale[0][0]), abs(wave.scale[1][0]) ), abs(wave.scale[2][0]) )
+    end_scale = min( min( abs(wave.scale[0].start), abs(wave.scale[1].start) ), abs(wave.scale[2].start) )
     scale = ( (0, end_scale, float(end_scale)/(iso_av.shape[0]-1)) ,)
-    iso_av = Wave(iso_av,scale)
+    iso_av = Wave(iso_av, scale)
     print("  Finished IsoAv!")
     return iso_av
 
+
+#@jit
+def to_spherical(wave):
+    scale = np.array( wave.full_scale )
+    rmax = max( abs(np.amin(scale[0,:])), abs(np.amax(scale[0,:])) ) # rmax should really take into account the diagonal distance, so this essentially cuts off the corners
+    R = np.linspace(0.0, rmax, wave.shape[1]) # This has units of pixels, not the units of the domain of the wave
+    THETA = np.linspace(0, np.pi, wave.shape[0])
+    PHI = np.linspace(-np.pi, np.pi, wave.shape[2])
+    X = R*np.sin(PHI)*np.cos(THETA)
+    Y = R*np.sin(PHI)*np.sin(THETA)
+    Z = R*np.cos(PHI)
+
+    npix = scale.shape[-1]-2
+    m = npix/(np.amax(scale)-np.amin(scale))
+    b = -m*np.amin(scale)
+
+    #X = m*X + b
+    #Y = m*Y + b
+    #Z = m*Z + b
+
+    XYZ = np.meshgrid(X, Y, Z)
+    #sgrid = np.meshgrid(R, THETA, PHI)
+    #sgrid = np.array( np.meshgrid(R, THETA, PHI) )
+    #cgrid = np.zeros_like(sgrid)
+    #cgrid[0] = sgrid[0]*np.sin(sgrid[2])*np.cos(sgrid[1])
+    #cgrid[1] = sgrid[0]*np.sin(sgrid[2])*np.sin(sgrid[1])
+    #cgrid[2] = sgrid[0]*np.cos(sgrid[2])
+    #Wave(cgrid).save('cgrid.itx')
+    #cgrid = XYZ
+    #Wave(cgrid).save('XYZ.itx')
+    #XYZ = m*XYZ + b # Convert from units of pixels to units of the domain of the wave
+    sph = ndimage.map_coordinates(wave.data, XYZ, cval=0.0)
+    sph = Wave(sph, scale=( (0.0, rmax, wave.shape[1]), (0, np.pi, wave.shape[0]), (-np.pi, np.pi, wave.shape[2]) ))
+    #print(np.amin(wave.data))
+    #print(np.amax(wave.data))
+    #print(np.amin(XYZ))
+    #print(np.amax(XYZ))
+    #print(np.amin(sph.data))
+    #print(np.amax(sph.data))
+    return sph
+
+
+@jit
+def IsoAvg(wave, strip_width=2):
+    pixels = min(min(wave.shape[0], wave.shape[1]), wave.shape[2]) / (2*strip_width)
+    iso_av = np.zeros(pixels, dtype=np.float64)
+    npix = np.zeros(pixels, dtype=np.float64)
+    # Assume data is centered at (0,0,0) and extends from (-x0 to +x0), etc.
+    new_scale = np.linspace(0.0, max(max(abs(wave.scale.stop[0]), abs(wave.scale.stop[1])), abs(wave.scale.stop[2])), pixels)
+    pixel_scale = np.linspace(0.0, max(max(abs(wave.shape[0]), abs(wave.shape[1])), abs(wave.shape[2])), pixels)
+
+    x0 = wave.scale.start[0]
+    dx = wave.scale.step[0]
+    y0 = wave.scale.start[1]
+    dy = wave.scale.step[1]
+    z0 = wave.scale.start[2]
+    dz = wave.scale.step[2]
+
+    swapped = np.swapaxes(wave.data, 0, 2)
+    full_scale = wave.full_scale
+    for i in range(255,wave.shape[0]):
+        for j in range(255,wave.shape[1]):
+            for k in range(wave.shape[2]):
+                r = np.sqrt( (x0+dx*i)**2 + (y0+dy*j)**2 + (z0+dz*k)**2 )
+                if r <= 1.5:
+                    idx = np.nanargmin(np.abs(new_scale-r))
+                    npix[idx] += 1
+                    iso_av[idx] += swapped[i,j,k]
+    iso_av /= npix
+    return Wave(iso_av, ((0.0, 1.5, None),))
+    
 
 #@jit
 def condense_wave(wave, width):
@@ -343,51 +502,20 @@ def condense_wave(wave, width):
         Setting the scale doesn't work great right now. """
     # Apply width
     new = np.array( [sum(wave[i:i+width])/(width) for i in range(0, wave.shape[0], width)] )
-    end_scale = min( [abs(wave.scale[i][1]) for i in range(wave.dimensions)] )
-    scale = ( (0, end_scale, float(end_scale)/(new.shape[0]-1)) ,)
-    return Wave(new, scale)
-
-
-@jit
-def to_spherical(wave):
-    scale = np.array( wave.full_scale )
-    rmax = max( abs(np.amin(scale[0,:])), abs(np.amax(scale[0,:])) ) # rmax should really take into account the diagonal distance, so this essentially cuts off the corners
-    sph_scale = Wave(np.zeros(scale.shape), scale)
-    R = np.linspace(0.0, rmax, sph_scale.shape[1])
-    THETA = np.linspace(0, np.pi, sph_scale.shape[1])
-    PHI = np.linspace(-np.pi, np.pi, sph_scale.shape[1])
-    sgrid = np.meshgrid(R, THETA, PHI)
-    #sgrid = np.array( np.meshgrid(R, THETA, PHI) )
-    cgrid = np.zeros_like(sgrid)
-    cgrid[0] = sgrid[0]*np.sin(sgrid[2])*np.cos(sgrid[1])
-    cgrid[1] = sgrid[0]*np.sin(sgrid[2])*np.sin(sgrid[1])
-    cgrid[2] = sgrid[0]*np.cos(sgrid[2])
-    npix = scale.shape[-1]-2
-    m = npix/(np.amax(scale)-np.amin(scale))
-    b = -m*np.amin(scale)
-    c2grid = m*cgrid + b
-    sph = ndimage.map_coordinates(wave.data, c2grid, cval=0.0)
-    sph = Wave(sph, scale=sph_scale)
-    #print(np.amin(wave.data))
-    #print(np.amax(wave.data))
-    #print(np.amin(c2grid))
-    #print(np.amax(c2grid))
-    #print(np.amin(sph.data))
-    #print(np.amax(sph.data))
-    return sph
+    return Wave(new, ((0, wave.scale.stop, None),))
 
 
 class _WithinRadius(object):
     """ This is a helper class to make RadiusChop run much faster """
     def __init__(self, wave, rmin, rmax):
-        self.wave = wave
+        self.data = wave.data
         self.full_scale = wave.full_scale
         self.rmin2 = rmin**2
         self.rmax2 = rmax**2
 
     @np.vectorize
     def __call__(self, i,j,k):
-        return self.wave[i,j,k] if self.rmin2 < self.full_scale[0][i]**2+self.full_scale[1][j]**2+self.full_scale[2][k]**2 < self.rmax2 else 0.0
+        return self.data[i,j,k] if self.rmin2 < self.full_scale[0][i]**2+self.full_scale[1][j]**2+self.full_scale[2][k]**2 < self.rmax2 else 0.0
         
 
 def RadiusChop(wave, rmin, rmax):
@@ -400,7 +528,7 @@ def RadiusChop(wave, rmin, rmax):
         A new Igor wave-like object.
     """
     within_radius = _WithinRadius(wave, rmin, rmax)
-    data = np.fromfunction(lambda i,j,k: within_radius(within_radius,i,j,k), shape=wave.shape, dtype=np.int32)
+    data = np.fromfunction(lambda i,j,k: within_radius(within_radius,i,j,k), shape=wave.shape, dtype=np.float)
     return Wave(data, wave.scale)
 
 
@@ -454,15 +582,10 @@ def smooth(x, window_len=11, window='hanning'):
     return y
   
   
-def plot(data):
-    plt.plot(data.data)
-    plt.show()
-
-
 def FindSpots(wave, numstdevs, iso_av=None, verbose=True):
     """ """
-    scale = (-1.5,1.5,3./(wave.shape[0]-1))
-    wave.scale = (scale,scale,scale,)
+    scale = (-1.5, 1.5, None)
+    wave = Wave(wave.data, (scale,scale,scale,))
 
     # Get first dip in iso_av for RadiusChop
     if iso_av is None: # Optionally included so that I can pre-calculate it and then reuse it later if I want to versus it being discarded after use in this function. This also allows me to use condense_wave on it first (or some other operation) if I want to for some reason.
@@ -470,9 +593,9 @@ def FindSpots(wave, numstdevs, iso_av=None, verbose=True):
     peaks = FindPeaks(iso_av)
     highest = max(peaks)
     highest_index = iso_av.val2index(highest)
-    artifact_cutoff = iso_av.val2x( min(iso_av[0:highest_index]) )
+    artifact_cutoff = iso_av.val2x( np.nanmin(iso_av[0:highest_index]) )
     if verbose: print("Data below R = {0} is bad due to artifacts from the 3D FT, cutting that out for further calculations...".format(artifact_cutoff))
-    chopped = RadiusChop(wave, artifact_cutoff, 1.5)
+    chopped = RadiusChop(wave, rmin=artifact_cutoff, rmax=1.5)
 
     if verbose: print("Thresholding/masking chopped image...")
     stdev = np.std(chopped.data)
@@ -501,7 +624,7 @@ def FindSpots(wave, numstdevs, iso_av=None, verbose=True):
                 'summed_intensity': np.sum(wave.data[slice]),
                 'max_intensity': np.amax(wave.data[slice]),
                 }
-            spot['index_center'] = np.unravel_index(np.argmax(wave.data[slice]), spot['data'].shape)
+            spot['index_center'] = np.unravel_index(np.nanargmax(wave.data[slice]), spot['data'].shape)
             spot['index_center'] = (spot['index_center'][0] + slice[0].start, spot['index_center'][1] + slice[1].start, spot['index_center'][2] + slice[2].start)
             spot['domain_center'] = (wave.full_scale[0][spot['index_center'][0]], wave.full_scale[1][spot['index_center'][1]], wave.full_scale[2][spot['index_center'][2]]) # TODO this is ugly, I should implement something inside the Wave object to make it much prettier
             spot['|g|'] = np.linalg.norm( spot['domain_center'] )
@@ -554,7 +677,7 @@ def fit_spot(wave, spot, function='gauss', hold_sigmas=False, hold_centers=False
             continue
         if tup is not None:
             popt, perr, res = tup
-            print(extra, res)
+            #print(extra, res)
             if res < best['residual']:
                 best['spot'] = new
                 best['popt'] = popt
@@ -612,14 +735,14 @@ def FindPeaks(wave):
     maxs = signal.argrelextrema(wave.data, np.greater)[0]
     positions = [wave.full_scale[x] for x in maxs]
     intensities = [wave[x] for x in maxs]
-    return Wave(intensities, scale='Custom', full_scale=positions)
+    return Wave(intensities, custom_scale=(positions,))
 
 
 def FindValleys(wave):
     maxs = signal.argrelextrema(wave.data, np.less)[0]
     positions = [wave.full_scale[x] for x in maxs]
     intensities = [wave[x] for x in maxs]
-    return Wave(intensities, scale='Custom', full_scale=positions)
+    return Wave(intensities, custom_scale=(positions,))
 
 
 
@@ -629,17 +752,40 @@ def create_output(modelfilename, spots, filename, num_spots=None):
     of.write('{0}\n'.format(modelfilename))
     of.write('{0}\n'.format(num_spots))
     for i,spot in enumerate(spots):
+        x0 = spot['fit'].x0 + spot['index_center'][0]
+        y0 = spot['fit'].y0 + spot['index_center'][1]
+        z0 = spot['fit'].z0 + spot['index_center'][2]
+        # Expand the sigmas to make the fit into a windowing function
+        sx = spot['fit'].sx * 1.3
+        sy = spot['fit'].sy * 1.3
+        sz = spot['fit'].sz * 1.3
+        cxy = spot['fit'].cxy
+        cxz = spot['fit'].cxz
+        cyz = spot['fit'].cyz
+        # We run the IFT at 256 pix, so we need to divide things by 2. Still, for batch_convert.py we need some of the 512 information so include that too.
+        xstart_256 = int(spot['slices'][0].start/2)
+        ystart_256 = int(spot['slices'][1].start/2)
+        zstart_256 = int(spot['slices'][2].start/2)
+        xstop_256 = int(spot['slices'][0].stop/2)
+        ystop_256 = int(spot['slices'][1].stop/2)
+        zstop_256 = int(spot['slices'][2].stop/2)
+        # Write to paramfile
         of.write('spot{0}_\n'.format(i))
-        of.write('{0} {1} {2} {3}\n'.format(spot['fit'].x0,  spot['fit'].y0,  spot['fit'].z0,  spot['|g|']))
-        of.write('{0} {1} {2} {3}\n'.format(spot['fit'].sx,  spot['fit'].sy,  spot['fit'].sz,  spot['|g|']))
-        of.write('{0} {1} {2} {3}\n'.format(spot['fit'].cxy, spot['fit'].cxz, spot['fit'].cyz, spot['|g|']))
+        of.write('{0} {1} {2}\n'.format(x0/2.0, y0/2.0, z0/2.0))
+        of.write('{0} {1} {2}\n'.format(sx, sy, sz))
+        of.write('{0} {1} {2}\n'.format(cxy, cxz, cyz))
+        of.write('{0} {1} {2} {3}\n'.format(xstart_256, xstop_256, x0, spot['|g|']))
+        of.write('{0} {1} {2} {3}\n'.format(ystart_256, ystop_256, y0, spot['|g|']))
+        of.write('{0} {1} {2} {3}\n'.format(zstart_256, zstop_256, z0, spot['|g|']))
     of.close()
 
 
 def load_data(infile):
-    """ read a file into a numpy array. these formats are supported: Igor wave (.itx); numpy array (.npy)"""
+    """ read a file into a numpy array. these formats are supported: Igor wave (.itx); numpy array (.npy); gfx file (.gfx)"""
     filename, extension = os.path.splitext(infile)
-    if extension == '.itx':
+    if extension == '.gfx':
+        return gfx_to_numpy(infile)
+    elif extension == '.itx':
         return wave3d_to_numpy(infile)
     elif extension == '.npy':
         return np.load(infile)
@@ -649,20 +795,32 @@ def load_data(infile):
 
 
 def main():
+    #data = np.zeros((512,512,512))
+    #w = Wave(data, ((-1.5, 1.5, None),(-1.5,1.5,None),(-1.5,1.5,None)))
+    #print(w.scale.step)
+    #w2 = Wave(data, w.scale)
     modelfile = sys.argv[1]
     print("Loading data...")
     wave = load_data(sys.argv[2])
-    scales = (-1.5,1.5,3./64.)
+    scales = (-1.5, 1.5, None)
     wave = Wave(wave, (scales, scales, scales) )
     print("Loaded data!")
 
     print("Calculating annular average...")
-    iso_av = IsoAverage3D(wave)
-    iso_av.save('iso_av.itx')
-    iso_av_stripped = condense_wave(iso_av, 4)
+    #iso_av = IsoAverage3D(wave)
+    #iso_av = IsoAvg(wave, 0.5)
+    #iso_av.save('iso_av.itx')
+    #iso_av.save('iso_av.npy')
+    iso_av = np.load('iso_av.npy')
+    iso_av = Wave(iso_av, ((0., 1.5, None),))
+    iso_av_condensed = condense_wave(iso_av, 4) # Do some averaging along the radial direction to average out some approximation errors
+    smoothed = smooth(iso_av_condensed.data)
+    smoothed = Wave(smoothed, scale=((iso_av_condensed.scale.start, iso_av_condensed.scale.stop, None),))
+    smoothed.save('smoothed.itx')
 
-    spots = FindSpots(wave, 10, iso_av=iso_av, verbose=True)
+    spots = FindSpots(wave, 15, iso_av=smoothed, verbose=True)
 
+    fitted_spots = []
     Fit = namedtuple('Fit', ['x0', 'y0', 'z0', 'sx', 'sy', 'sz', 'cxy', 'cxz', 'cyz', 'residual', 'perr'])
     for i,spot in enumerate(spots):
         Wave(spot['data']).save('spot{0}.npy'.format(i))
@@ -674,19 +832,18 @@ def main():
         print("  volume of spot = {0}".format(spot['volume']))
         print("  shape of spot = {0}".format(spot['data'].shape))
         best_fit = fit_spot(wave, spot)
-        popt = best_file['popt']
-        fit = Fit(*popt, residual=best_fit['residual'], perr=best_fit['perr'])
-        spot['fit'] = fit
         if best_fit is not None:
-            print(best_fit['extra'])
-            print(best_fit['popt'])
-            print(best_fit['perr'])
-            print(best_fit['residual'])
+            #print(best_fit['extra'])
+            #print(best_fit['popt'])
+            #print(best_fit['perr'])
+            #print(best_fit['residual'])
+            best_fit['spot']['fit'] = Fit(*best_fit['popt'], residual=best_fit['residual'], perr=best_fit['perr'])
+            fitted_spots.append(best_fit['spot'])
         else:
             print("  Fit failed :(")
         if i > 20: break
 
-    create_output(modelfile, spots, 'paramfile.txt')
+    create_output(modelfile, fitted_spots, 'paramfile.txt')
 
 
 if __name__ == '__main__':

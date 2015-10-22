@@ -23,7 +23,7 @@ echo "Submit directory: $SLURM_SUBMIT_DIR"
 echo ""
 
 # Executable
-python /home/maldonis/3dft/3dft_analysis.py $@
+python /home/maldonis/3dft/batch_convert.py $@
 
 echo "Finished on:"
 date '+%s'

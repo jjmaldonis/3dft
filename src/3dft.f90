@@ -49,7 +49,7 @@ program ft3d
     if (istat == 0) then
         read(c,'(i)') npix
     else
-        npix = 256
+        npix = 512
     endif
 
     call read_model(trim(modelfile), m, istat)
