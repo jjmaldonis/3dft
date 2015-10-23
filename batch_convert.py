@@ -43,9 +43,9 @@ def main():
                 x0,y0,z0 = tuple([float(x) for x in params[j+1].split()])
                 sx,sy,sz = tuple([float(x) for x in params[j+2].split()])
                 cxy,cxz,cyz = tuple([float(x) for x in params[j+3].split()])
-                xc = int(params[j+4].split()[2])
-                yc = int(params[j+5].split()[2])
-                zc = int(params[j+6].split()[2])
+                xc = eval(params[j+4].split()[2])
+                yc = eval(params[j+5].split()[2])
+                zc = eval(params[j+6].split()[2])
                 gvec = float(params[j+6].split()[3])
                 print("g-vector length = {0}".format(gvec))
                 print("The more correct g-vector length == {0}".format(sqrt((npix/4.0-x0+1)**2 + (npix/4.0-y0+1)**2 + (npix/4.0-z0)**2+1)*3.0/(npix/2)))
@@ -53,7 +53,8 @@ def main():
                     m = Model(new_model_file_base_name+'.xyz')
                     rot_arr = calc_rot_array_from_hkl(npix/2-xc,npix/2-yc,npix/2-zc)
                     rot(m,rot_arr)
-                    m.write_real_xyz(new_model_file_base_name+'.rotated.real.xyz')
+                    m.write(new_model_file_base_name+'.rotated.xyz')
+                    m.write(new_model_file_base_name+'.rotated.cif')
                 print('')
 
 

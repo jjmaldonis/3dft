@@ -37,13 +37,16 @@ def main():
     pcomm = run_subproc("sbatch /home/maldonis/3dft/3dft.sh {0} {1} {2}".format(modelfile, outbase, numpix))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
-    pcomm = run_subproc("sbatch /home/maldonis/3dft/3dft_analysis.sh {0} {1}ft.gfx -d=afterok:{2}".format(modelfile, outbase, jobid))
+    pcomm = run_subproc("sbatch --dependency=afterok:{2} /home/maldonis/3dft/3dft_analysis.sh {0} {1}ft.gfx".format(modelfile, outbase, jobid))
+    #pcomm = run_subproc("sbatch /home/maldonis/3dft/3dft_analysis.sh {0} {1}ft.gfx".format(modelfile, outbase))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
-    pcomm = run_subproc("sbatch /home/maldonis/3dft/ift.sh paramfile.txt, -d=afterok:{0}").format(jobid)
+    pcomm = run_subproc("sbatch --dependency=afterok:{0} /home/maldonis/3dft/ift.sh paramfile.txt".format(jobid))
+    #pcomm = run_subproc("sbatch /home/maldonis/3dft/ift.sh paramfile.txt")
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
-    pcomm = run_subproc("python /home/maldonis/3dft/batch_convert.py paramfile.txt {0} {1} -d=afterok:{0}").format(jobid, numpix)
+    pcomm = run_subproc("sbatch --dependency=afterok:{0} /home/maldonis/3dft/batch_convert.sh paramfile.txt {0} {1}".format(jobid, numpix))
+    #pcomm = run_subproc("sbatch /home/maldonis/3dft/batch_convert.sh paramfile.txt {0} {1}".format(jobid, numpix))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
 if __name__ == '__main__':

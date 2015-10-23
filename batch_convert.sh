@@ -1,6 +1,6 @@
 #!/bin/sh
 
-#SBATCH --job-name=3dIFT
+#SBATCH --job-name=batch_convert
 #SBATCH --partition=pre
 #SBATCH --error=job.%J.err
 #SBATCH --output=job.%J.out

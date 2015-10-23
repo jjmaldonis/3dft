@@ -752,9 +752,9 @@ def create_output(modelfilename, spots, filename, num_spots=None):
     of.write('{0}\n'.format(modelfilename))
     of.write('{0}\n'.format(num_spots))
     for i,spot in enumerate(spots):
-        x0 = spot['fit'].x0 + spot['index_center'][0]
-        y0 = spot['fit'].y0 + spot['index_center'][1]
-        z0 = spot['fit'].z0 + spot['index_center'][2]
+        x0 = spot['fit'].x0 + spot['slices'][0].start
+        y0 = spot['fit'].y0 + spot['slices'][1].start
+        z0 = spot['fit'].z0 + spot['slices'][2].start
         # Expand the sigmas to make the fit into a windowing function
         sx = spot['fit'].sx * 1.3
         sy = spot['fit'].sy * 1.3
@@ -771,12 +771,12 @@ def create_output(modelfilename, spots, filename, num_spots=None):
         zstop_256 = int(spot['slices'][2].stop/2)
         # Write to paramfile
         of.write('spot{0}_\n'.format(i))
-        of.write('{0} {1} {2}\n'.format(x0/2.0, y0/2.0, z0/2.0))
-        of.write('{0} {1} {2}\n'.format(sx, sy, sz))
-        of.write('{0} {1} {2}\n'.format(cxy, cxz, cyz))
-        of.write('{0} {1} {2} {3}\n'.format(xstart_256, xstop_256, x0, spot['|g|']))
+        of.write('{0} {1} {2}\n'.format(y0/2.0, z0/2.0, x0/2.0))
+        of.write('{0} {1} {2}\n'.format(sy, sz, sx))
+        of.write('{0} {1} {2}\n'.format(cxz, cyz, cxy))
         of.write('{0} {1} {2} {3}\n'.format(ystart_256, ystop_256, y0, spot['|g|']))
         of.write('{0} {1} {2} {3}\n'.format(zstart_256, zstop_256, z0, spot['|g|']))
+        of.write('{0} {1} {2} {3}\n'.format(xstart_256, xstop_256, x0, spot['|g|']))
     of.close()
 
 
@@ -795,10 +795,6 @@ def load_data(infile):
 
 
 def main():
-    #data = np.zeros((512,512,512))
-    #w = Wave(data, ((-1.5, 1.5, None),(-1.5,1.5,None),(-1.5,1.5,None)))
-    #print(w.scale.step)
-    #w2 = Wave(data, w.scale)
     modelfile = sys.argv[1]
     print("Loading data...")
     wave = load_data(sys.argv[2])
@@ -808,21 +804,23 @@ def main():
 
     print("Calculating annular average...")
     #iso_av = IsoAverage3D(wave)
-    #iso_av = IsoAvg(wave, 0.5)
-    #iso_av.save('iso_av.itx')
-    #iso_av.save('iso_av.npy')
-    iso_av = np.load('iso_av.npy')
-    iso_av = Wave(iso_av, ((0., 1.5, None),))
+    iso_av = IsoAvg(wave, 0.5)
+    iso_av.save('iso_av.itx')
+    iso_av.save('iso_av.npy')
     iso_av_condensed = condense_wave(iso_av, 4) # Do some averaging along the radial direction to average out some approximation errors
     smoothed = smooth(iso_av_condensed.data)
     smoothed = Wave(smoothed, scale=((iso_av_condensed.scale.start, iso_av_condensed.scale.stop, None),))
     smoothed.save('smoothed.itx')
+    smoothed.save('smoothed.npy')
 
     spots = FindSpots(wave, 15, iso_av=smoothed, verbose=True)
 
     fitted_spots = []
-    Fit = namedtuple('Fit', ['x0', 'y0', 'z0', 'sx', 'sy', 'sz', 'cxy', 'cxz', 'cyz', 'residual', 'perr'])
+    Fit = namedtuple('Fit', ['sx', 'sy', 'sz', 'cxy', 'cxz', 'cyz', 'x0', 'y0', 'z0', 'residual', 'perr'])
     for i,spot in enumerate(spots):
+        print('')
+        print(i)
+        print(spot)
         Wave(spot['data']).save('spot{0}.npy'.format(i))
         Wave(spot['data']).save('spot{0}.itx'.format(i))
         print("Starting new spot:  {0}".format(i))
@@ -833,10 +831,10 @@ def main():
         print("  shape of spot = {0}".format(spot['data'].shape))
         best_fit = fit_spot(wave, spot)
         if best_fit is not None:
-            #print(best_fit['extra'])
-            #print(best_fit['popt'])
-            #print(best_fit['perr'])
-            #print(best_fit['residual'])
+            print(best_fit['extra'])
+            print(best_fit['popt'])
+            print(best_fit['perr'])
+            print(best_fit['residual'])
             best_fit['spot']['fit'] = Fit(*best_fit['popt'], residual=best_fit['residual'], perr=best_fit['perr'])
             fitted_spots.append(best_fit['spot'])
         else:
