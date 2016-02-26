@@ -18,10 +18,10 @@ def main():
         j = i*7 +2
         prefix = params[j] + jobid
         modelfile = 'submodels/' + prefix + '.xyz'
-        print('qsub ft_slurm.sh {0} {1} {2}'.format(modelfile,prefix+'_512_',npix))
-        #args = shlex.split('qsub ft_slurm.sh {0} {1} {2}'.format(modelfile,prefix+'_512_',npix))
-        print(' '.join(['qsub ../ft_slurm.sh',modelfile,prefix+'_512_',str(npix)]))
-        p = subprocess.Popen(['qsub','../ft_slurm.sh',modelfile,prefix+'_512_',str(npix)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print('qsub submits/ft_slurm.sh {0} {1} {2}'.format(modelfile,prefix+'_512_',npix))
+        #args = shlex.split('qsub submits/ft_slurm.sh {0} {1} {2}'.format(modelfile,prefix+'_512_',npix))
+        print(' '.join(['qsub ../submits/ft_slurm.sh',modelfile,prefix+'_512_',str(npix)]))
+        p = subprocess.Popen(['qsub','../submits/ft_slurm.sh',modelfile,prefix+'_512_',str(npix)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         #print(' '.join(['../3dft',modelfile,prefix+'_512_',str(npix)]))
         #p = subprocess.Popen(['../3dft',modelfile,prefix+'_512_',str(npix)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -34,8 +34,8 @@ def main():
         perr = p.stderr.read()
         preturncode = p.wait()
         if(preturncode != 0):
-            print("qsub ft_slurm.sh exit status: "+str(preturncode))
-            raise Exception("qsub ft_slurm.sh failed: {0}!".format(perr))
+            print("qsub submits/ft_slurm.sh exit status: "+str(preturncode))
+            raise Exception("qsub submits/ft_slurm.sh failed: {0}!".format(perr))
         #print('')
 
 

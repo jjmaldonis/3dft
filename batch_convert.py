@@ -1,7 +1,6 @@
 import sys
 import subprocess
 from lines_to_3d_wave import lines_to_3d_wave
-sys.path.insert(0, '/home/maldonis/model_analysis/scripts')
 from ift_atom_selection import atom_selection
 from rot_3d import calc_rot_array_from_hkl, rot
 from model import Model

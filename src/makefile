@@ -6,16 +6,8 @@ FCFLAGS = -O2 -openmp -fpp
 
 SRC = gfx.f90 model_v2.f90 scattering_factors.f90
 OBJ = $(addsuffix .o, $(basename $(SRC)))
-ft: APP = ../3dft
-ft: SRC = gfx.f90 model_v2.f90 scattering_factors.f90 3dft.f90
-ft: OBJ = $(addsuffix .o, $(basename $(SRC)))
-ift: APP = ../inverse3dft
-ift: SRC = gfx.f90 model_v2.f90 scattering_factors.f90 inverse3dft.f90
-ift: OBJ = $(addsuffix .o, $(basename $(SRC)))
-stdev: APP = ../stdev
-stdev: SRC = gfx.f90 model_v2.f90 scattering_factors.f90 stdev.f90
-stdev: OBJ = $(addsuffix .o, $(basename $(SRC)))
 
+all: ft ift stdev
 
 .PHONY: ft ift stdev clean all
 .SUFFIXES: .f90 .o
@@ -24,13 +16,13 @@ stdev: OBJ = $(addsuffix .o, $(basename $(SRC)))
 	${FC} -c $< ${FCFLAGS}
 
 ft: ${OBJ} ${SRC} 3dft.o
-	${FC} ${OBJ} ${FCFLAGS} -o ${APP}
+	${FC} ${OBJ} 3dft.o ${FCFLAGS} -o ../3dft
 
 ift: ${OBJ} ${SRC} inverse3dft.o
-	${FC} ${OBJ} ${FCFLAGS} -o ${APP}
+	${FC} ${OBJ} inverse3dft.o ${FCFLAGS} -o ../inverse3dft
 
 stdev: ${OBJ} ${SRC} stdev.o
-	${FC} ${OBJ} ${FCFLAGS} -o ${APP}
+	${FC} ${OBJ} stdev.o ${FCFLAGS} -o ../stdev
 
 clean:
 	rm -f *.mod *.o 3dft inverse3dft stdev

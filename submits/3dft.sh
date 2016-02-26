@@ -1,6 +1,6 @@
 #!/bin/sh
 
-#SBATCH --job-name=batch_convert
+#SBATCH --job-name=3dIFT
 #SBATCH --partition=pre
 #SBATCH --error=job.%J.err
 #SBATCH --output=job.%J.out
@@ -14,6 +14,8 @@
 
 echo "Date:"
 date '+%s'
+echo "Github has:"
+git rev-parse --verify HEAD
 echo "Using ACI / HCP / Slurm cluster."
 echo "JobID = $SLURM_JOB_ID"
 echo "Using $SLURM_NNODES nodes"
@@ -21,9 +23,10 @@ echo "Using $SLURM_NODELIST nodes."
 echo "Number of cores per node: $SLURM_TASKS_PER_NODE"
 echo "Submit directory: $SLURM_SUBMIT_DIR"
 echo ""
+cat $@
 
 # Executable
-python /home/maldonis/3dft/batch_convert.py $@
+mpiexec /home/maldonis/3dft/3dft $@
 
 echo "Finished on:"
 date '+%s'
