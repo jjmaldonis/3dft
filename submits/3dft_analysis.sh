@@ -23,7 +23,6 @@ echo "Using $SLURM_NODELIST nodes."
 echo "Number of cores per node: $SLURM_TASKS_PER_NODE"
 echo "Submit directory: $SLURM_SUBMIT_DIR"
 echo ""
-cat $@
 
 # Executable
 python /home/maldonis/3dft/3dft_analysis.py $@

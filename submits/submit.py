@@ -19,6 +19,7 @@ def run_subproc(args):
         raise Exception("{0} failed!".format(args[0]))
     return pcomm
 
+
 def main():
     modelfile = sys.argv[1]
     outbase = sys.argv[2]
@@ -27,20 +28,39 @@ def main():
     except:
         numpix = 512
 
-    pcomm = run_subproc("sbatch /home/maldonis/3dft/submits/3dft.sh {0} {1} {2}".format(modelfile, outbase, numpix))
+    head, _ = os.path.split(outbase)
+
+    pcomm = run_subproc("sbatch -D {head} /home/maldonis/3dft/submits/3dft.sh {modelfile} {outbase} {numpix}".format(
+            head=head,
+            modelfile=modelfile,
+            outbase=outbase,
+            numpix=numpix
+    ))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
-    pcomm = run_subproc("sbatch --dependency=afterok:{2} /home/maldonis/3dft/submits/3dft_analysis.sh {0} {1}ft.gfx".format(modelfile, outbase, jobid))
-    #pcomm = run_subproc("sbatch /home/maldonis/3dft/submits/3dft_analysis.sh {0} {1}ft.gfx".format(modelfile, outbase))
+    pcomm = run_subproc("sbatch -D {head} --dependency=afterok:{jobid} /home/maldonis/3dft/submits/3dft_analysis.sh {modelfile} {outbase}ft.gfx {head}".format(
+            head=head,
+            modelfile=modelfile,
+            outbase=outbase,
+            jobid=jobid
+    ))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
-    pcomm = run_subproc("sbatch --dependency=afterok:{0} /home/maldonis/3dft/submits/ift.sh paramfile.txt".format(jobid))
-    #pcomm = run_subproc("sbatch /home/maldonis/3dft/submits/ift.sh paramfile.txt")
+    pcomm = run_subproc("sbatch -D {head} --dependency=afterok:{jobid} /home/maldonis/3dft/submits/ift.sh {paramfile}".format(
+            head=head,
+            jobid=jobid,
+            paramfile=os.path.join(head, 'paramfile.txt')
+    ))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
-    pcomm = run_subproc("sbatch --dependency=afterok:{0} /home/maldonis/3dft/submits/batch_convert.sh paramfile.txt {0} {1}".format(jobid, numpix))
-    #pcomm = run_subproc("sbatch /home/maldonis/3dft/submits/batch_convert.sh paramfile.txt {0} {1}".format(jobid, numpix))
+    pcomm = run_subproc("sbatch -D {head} --dependency=afterok:{jobid} /home/maldonis/3dft/submits/batch_convert.sh {paramfile} {jobid} {numpix}".format(
+            head=head,
+            jobid=jobid,
+            numpix=numpix,
+            paramfile=os.path.join(head, 'paramfile.txt')
+    ))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
+
 
 if __name__ == '__main__':
     main()

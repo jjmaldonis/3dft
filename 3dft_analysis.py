@@ -795,6 +795,7 @@ def load_data(infile):
 
 
 def main():
+    output_directory = sys.argv[3]
     modelfile = sys.argv[1]
     print("Loading data...")
     wave = load_data(sys.argv[2])
@@ -841,7 +842,7 @@ def main():
             print("  Fit failed :(")
         if i > 20: break
 
-    create_output(modelfile, fitted_spots, 'paramfile.txt')
+    create_output(modelfile, fitted_spots, os.path.join(output_directory, 'paramfile.txt'))
 
 
 if __name__ == '__main__':

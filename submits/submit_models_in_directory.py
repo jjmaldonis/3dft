@@ -28,9 +28,11 @@ def main():
             if '.xyz' not in f:
                 continue
             outbase = f.split('.')
-            outbase = [b for b in outbase if 'model_final' in b][0]
-            outbase = os.path.abspath(os.path.join(root, outbase))
+            outbase = [b for b in outbase if 'model_final' in b and 'spot' not in b][0]
+            outbase = os.path.abspath(os.path.join(root, outbase)) + '_'
+
             f = os.path.abspath(os.path.join(root, f))
+
             command = 'python /home/maldonis/3dft/submits/submit.py {} {}'.format(f, outbase)
             run_subproc(command)
 
