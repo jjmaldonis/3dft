@@ -6,7 +6,6 @@ import shlex
 def run_subproc(args):
     """ Run subprocess given args as a command line string"""
     print(args)
-    #return 5000
     args = shlex.split(args)
     p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     pcomm = p.communicate()
@@ -29,6 +28,7 @@ def main():
         numpix = 512
 
     head, _ = os.path.split(outbase)
+    head = os.path.abspath(head)
 
     pcomm = run_subproc("sbatch -D {head} /home/maldonis/3dft/submits/3dft.sh {modelfile} {outbase} {numpix}".format(
             head=head,
@@ -46,10 +46,9 @@ def main():
     ))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
-    pcomm = run_subproc("sbatch -D {head} --dependency=afterok:{jobid} /home/maldonis/3dft/submits/ift.sh {paramfile}".format(
+    pcomm = run_subproc("sbatch -D {head} /home/maldonis/3dft/submits/ift.sh {paramfile}".format(
             head=head,
-            jobid=jobid,
-            paramfile=os.path.join(head, 'paramfile.txt')
+            paramfile='paramfile.txt'
     ))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 
@@ -57,7 +56,7 @@ def main():
             head=head,
             jobid=jobid,
             numpix=numpix,
-            paramfile=os.path.join(head, 'paramfile.txt')
+            paramfile='paramfile.txt'
     ))
     jobid = int(pcomm[0].strip().split('\n').pop().split()[-1])
 

@@ -22,6 +22,7 @@ echo "Using $SLURM_NNODES nodes"
 echo "Using $SLURM_NODELIST nodes."
 echo "Number of cores per node: $SLURM_TASKS_PER_NODE"
 echo "Submit directory: $SLURM_SUBMIT_DIR"
+echo $@
 echo ""
 
 # Executable

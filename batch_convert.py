@@ -2,7 +2,7 @@ import sys
 import subprocess
 from lines_to_3d_wave import lines_to_3d_wave
 from ift_atom_selection import atom_selection
-from rot_3d import calc_rot_array_from_hkl, rot
+from rotate_3d import calc_rot_array_from_hkl, rotate as rot
 from model import Model
 from math import sqrt
 
@@ -51,7 +51,7 @@ def main():
                 if(worked == 0):
                     m = Model(new_model_file_base_name+'.xyz')
                     rot_arr = calc_rot_array_from_hkl(npix/2-xc,npix/2-yc,npix/2-zc)
-                    rot(m,rot_arr)
+                    rot(m, rot_arr)
                     m.write(new_model_file_base_name+'.rotated.xyz')
                     m.write(new_model_file_base_name+'.rotated.cif')
                 print('')

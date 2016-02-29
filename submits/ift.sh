@@ -23,7 +23,11 @@ echo "Using $SLURM_NODELIST nodes."
 echo "Number of cores per node: $SLURM_TASKS_PER_NODE"
 echo "Submit directory: $SLURM_SUBMIT_DIR"
 echo ""
-cat $@
+echo $@
+cat $1
+echo ""
+
+echo "mpiexec /home/maldonis/3dft/inverse3dft $SLURM_JOB_ID $1"
 
 # Executable
 mpiexec /home/maldonis/3dft/inverse3dft $SLURM_JOB_ID $1
